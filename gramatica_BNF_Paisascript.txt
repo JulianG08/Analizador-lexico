@@ -1,0 +1,75 @@
+<programa> ::= <lista_instrucciones>
+
+<lista_instrucciones> ::= <instruccion> 
+                        | <instruccion> <lista_instrucciones>
+
+<instruccion> ::= <asignacion> 
+                | <lectura> 
+                | <impresion> 
+                | <estructura_control>
+
+<asignacion> ::= pille_pues IDENTIFICADOR = <expresion_general>
+
+<lectura> ::= escuche_pues ( IDENTIFICADOR )
+
+<impresion> ::= hable_pues ( <expresion_general> )
+
+<estructura_control> ::= pillemos <expresion_general> { <lista_casos> }
+
+<lista_casos> ::= <caso> 
+                | <caso> <lista_casos>
+
+<caso> ::= <patron> pa_que_lleve <bloque_instrucciones>
+
+<patron> ::= NUM_ENTERO 
+           | CADENA_LITERAL 
+           | IDENTIFICADOR 
+           | sizas 
+           | naranjas 
+           | _
+
+<bloque_instrucciones> ::= <instruccion> 
+                         | { <lista_instrucciones> }
+
+<expresion_general> ::= <expresion_logica> 
+                      | <expresion_cadena>
+
+<expresion_cadena> ::= <cadena_valor> 
+                     | <expresion_cadena> <> <cadena_valor>
+
+<cadena_valor> ::= CADENA_LITERAL 
+                 | IDENTIFICADOR
+
+<expresion_logica> ::= <termino_logico> 
+                     | <expresion_logica> o_que <termino_logico>
+
+<termino_logico> ::= <factor_logico> 
+                   | <termino_logico> y_tambien <factor_logico>
+
+<factor_logico> ::= nanai <factor_logico>
+                  | <expresion_relacional>
+                  | sizas
+                  | naranjas
+                  | ( <expresion_logica> )
+
+<expresion_relacional> ::= <expresion_aritmetica> <operador_relacional> <expresion_aritmetica>
+                         | <expresion_aritmetica>
+
+<operador_relacional> ::= igualito 
+                        | distinto 
+                        | > 
+                        | < 
+                        | >= 
+                        | <=
+
+<expresion_aritmetica> ::= <termino_aritmetico> 
+                         | <expresion_aritmetica> + <termino_aritmetico> 
+                         | <expresion_aritmetica> - <termino_aritmetico>
+
+<termino_aritmetico> ::= <factor_aritmetico> 
+                       | <termino_aritmetico> * <factor_aritmetico> 
+                       | <termino_aritmetico> / <factor_aritmetico>
+
+<factor_aritmetico> ::= NUM_ENTERO 
+                      | IDENTIFICADOR 
+                      | ( <expresion_aritmetica> )
