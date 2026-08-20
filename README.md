@@ -1,4 +1,4 @@
-# Paisascript 🇨🇴 - Analizador Léxico y Gramática
+# Paisascript - Analizador Léxico y Gramática
 
 **Paisascript** es un lenguaje de programación de juguete (pseudocódigo) diseñado con la jerga y el sabor de la cultura paisa (Antioquia, Colombia). Este proyecto implementa un analizador léxico (Lexer) y define la gramática formal (BNF) para el lenguaje.
 
