@@ -1,75 +1,815 @@
-<programa> ::= <lista_instrucciones>
+================================================================================
+  PAISASCRIPT - GRAMATICA LIBRE DE CONTEXTO EN NOTACION BNF
+  Teoria de Compiladores - Entrega 1
+  Lenguaje fuente : Paisascript  (palabras reservadas en jerga paisa)
+  Lenguaje destino: Gleam        (funcional, inmutable, tipado estatico, BEAM)
+================================================================================
 
-<lista_instrucciones> ::= <instruccion> 
-                        | <instruccion> <lista_instrucciones>
 
-<instruccion> ::= <asignacion> 
-                | <lectura> 
-                | <impresion> 
-                | <estructura_control>
+================================================================================
+  1 - DESCRIPCION INFORMAL DEL LENGUAJE
+================================================================================
 
-<asignacion> ::= pille_pues IDENTIFICADOR = <expresion_general>
+Paisascript es un lenguaje imperativo-estructurado de proposito general cuyas
+palabras reservadas provienen del habla coloquial antioquena. Fue disenado como
+lenguaje FUENTE de un compilador fuente-a-fuente cuyo lenguaje DESTINO es Gleam.
 
-<lectura> ::= escuche_pues ( IDENTIFICADOR )
+--- 1.1 Vocabulario -----------------------------------------------------------
 
-<impresion> ::= hable_pues ( <expresion_general> )
+Un programa Paisascript es una secuencia de declaraciones de funcion y
+sentencias de nivel superior. El lenguaje es libre de formato: los saltos de
+linea y la indentacion no son significativos; sirven unicamente como
+separadores de tokens. Cada construccion de bloque se cierra con una palabra
+reservada explicita (ya_quedo, asi_quedo, hasta_ahi, listo_pues), lo que
+elimina toda ambiguedad de anidamiento sin depender de la indentacion.
 
-<estructura_control> ::= pillemos <expresion_general> { <lista_casos> }
+--- 1.2 Tipos de datos --------------------------------------------------------
 
-<lista_casos> ::= <caso> 
-                | <caso> <lista_casos>
+  numerito     enteros con signo, precision arbitraria      -> Gleam Int
+  quebradito   reales de punto flotante de doble precision  -> Gleam Float
+  cuento       cadenas de texto UTF-8 inmutables            -> Gleam String
+  siono        booleanos (sizas / naranjas)                 -> Gleam Bool
 
-<caso> ::= <patron> pa_que_lleve <bloque_instrucciones>
+El tipado es ESTATICO. La anotacion de tipo es obligatoria en los parametros
+formales y opcional en las declaraciones de variable, donde puede inferirse a
+partir de la expresion inicializadora (igual que el `let` de Gleam).
 
-<patron> ::= NUM_ENTERO 
-           | CADENA_LITERAL 
-           | IDENTIFICADOR 
-           | sizas 
-           | naranjas 
-           | _
+--- 1.3 Alcance (scope) -------------------------------------------------------
 
-<bloque_instrucciones> ::= <instruccion> 
-                         | { <lista_instrucciones> }
+El alcance es LEXICO y anidado. Cada bloque introduce un ambito nuevo. Una
+declaracion `pille_pues` cuyo identificador ya existe en el ambito actual NO
+modifica la variable anterior: crea un enlace nuevo que la oculta (shadowing),
+exactamente como el `let` de Gleam. Por lo tanto Paisascript es un lenguaje
+INMUTABLE, y esa decision de diseno es la que hace posible traducirlo a Gleam
+sin introducir estado mutable artificial.
 
-<expresion_general> ::= <expresion_logica> 
-                      | <expresion_cadena>
+--- 1.4 Comentarios -----------------------------------------------------------
 
-<expresion_cadena> ::= <cadena_valor> 
-                     | <expresion_cadena> <> <cadena_valor>
+Comentario de linea: comienza con // y se extiende hasta el fin de la linea.
+Se descartan durante el analisis lexico y no aparecen en la gramatica, que es
+la practica estandar. Se usa el mismo delimitador que Gleam para que el
+comentario pueda copiarse literalmente al codigo generado.
 
-<cadena_valor> ::= CADENA_LITERAL 
-                 | IDENTIFICADOR
 
-<expresion_logica> ::= <termino_logico> 
-                     | <expresion_logica> o_que <termino_logico>
+================================================================================
+  2 - CONJUNTO DE TERMINALES AGRUPADOS POR CATEGORIA
+================================================================================
 
-<termino_logico> ::= <factor_logico> 
-                   | <termino_logico> y_tambien <factor_logico>
+--- 2.1 Palabras reservadas - declaraciones y E/S -----------------------------
 
-<factor_logico> ::= nanai <factor_logico>
-                  | <expresion_relacional>
-                  | sizas
-                  | naranjas
-                  | ( <expresion_logica> )
+  LEXEMA           TOKEN                 SIGNIFICADO           GLEAM
+  pille_pues       KW_DECLARACION        declarar / asignar    let
+  escuche_pues     KW_LECTURA            leer de consola       erlang.get_line
+  hable_pues       KW_IMPRESION          imprimir en consola   io.println
+  hagale_pues      KW_FUNCION            definir funcion       pub fn
+  ya_quedo         KW_FIN_FUNCION        cierre de funcion     }
+  entregue_pues    KW_RETORNAR           retornar un valor     (expr. final)
 
-<expresion_relacional> ::= <expresion_aritmetica> <operador_relacional> <expresion_aritmetica>
-                         | <expresion_aritmetica>
+--- 2.2 Palabras reservadas - estructuras de control --------------------------
 
-<operador_relacional> ::= igualito 
-                        | distinto 
-                        | > 
-                        | < 
-                        | >= 
-                        | <=
+  LEXEMA           TOKEN                 SIGNIFICADO           GLEAM
+  si_acaso         KW_SI                 condicional           case
+  entonces_pues    KW_ENTONCES           rama verdadera        True  ->
+  sino_pues        KW_SINO               rama falsa            False ->
+  asi_quedo        KW_FIN_SI             cierre del si         }
+  mientras_que     KW_MIENTRAS           bucle por condicion   recursion de cola
+  dele_pues        KW_HACER              inicio de cuerpo      {
+  hasta_ahi        KW_FIN_MIENTRAS       cierre del mientras   }
+  pa_cada          KW_PARA               bucle con contador    list.range
+  desde            KW_DESDE              limite inferior       list.range(a, _)
+  hasta            KW_HASTA              limite superior       list.range(_, b)
+  de_a             KW_PASO               incremento del paso   (paso explicito)
+  listo_pues       KW_FIN_PARA           cierre del para       }
+  pillemos         KW_PILLEMOS           calce de patrones     case
+  pa_que_lleve     KW_FLECHA             flecha de caso / tipo ->
 
-<expresion_aritmetica> ::= <termino_aritmetico> 
-                         | <expresion_aritmetica> + <termino_aritmetico> 
-                         | <expresion_aritmetica> - <termino_aritmetico>
+--- 2.3 Palabras reservadas - tipos -------------------------------------------
 
-<termino_aritmetico> ::= <factor_aritmetico> 
-                       | <termino_aritmetico> * <factor_aritmetico> 
-                       | <termino_aritmetico> / <factor_aritmetico>
+  numerito         KW_TIPO_ENTERO        entero                Int
+  quebradito       KW_TIPO_REAL          real                  Float
+  cuento           KW_TIPO_CADENA        cadena                String
+  siono            KW_TIPO_BOOLEANO      booleano              Bool
 
-<factor_aritmetico> ::= NUM_ENTERO 
-                      | IDENTIFICADOR 
-                      | ( <expresion_aritmetica> )
+--- 2.4 Palabras reservadas - operadores logicos y literales ------------------
+
+  y_tambien        OP_Y                  conjuncion            &&
+  o_que            OP_O                  disyuncion            ||
+  nanai            OP_NO                 negacion              !
+  igualito         OP_IGUAL              igualdad              ==
+  distinto         OP_DISTINTO           desigualdad           !=
+  sizas            LIT_VERDADERO         booleano verdadero    True
+  naranjas         LIT_FALSO             booleano falso        False
+
+--- 2.5 Operadores simbolicos -------------------------------------------------
+
+  **               OP_POTENCIA           potencia              int/float.power
+  *                OP_MULT               multiplicacion        *   |  *.
+  /                OP_DIV                division              /   |  /.
+  %                OP_MODULO             modulo                %
+  +                OP_SUMA               suma                  +   |  +.
+  -                OP_RESTA              resta / negacion      -   |  -.
+  <>               OP_CONCAT             concatenacion         <>
+  >=               OP_MAYOR_IGUAL        mayor o igual         >=
+  <=               OP_MENOR_IGUAL        menor o igual         <=
+  >                OP_MAYOR              mayor que             >
+  <                OP_MENOR              menor que             <
+  =                OP_ASIGNACION         asignacion            =
+
+--- 2.6 Signos de puntuacion --------------------------------------------------
+
+  (                PAR_ABRE
+  )                PAR_CIERRA
+  {                LLAVE_ABRE
+  }                LLAVE_CIERRA
+  ,                COMA
+  _                COMODIN               patron por defecto    _
+
+--- 2.7 Terminales con atributo (definidos por expresion regular) -------------
+
+  IDENTIFICADOR    [a-z_naeiou...][a-zA-Z0-9_ ...]*
+                   Formalmente: primer caracter en {a-z, _} o letra minuscula
+                   acentuada {a, e, i, o, u, u con dieresis, n con virgulilla};
+                   siguientes caracteres: letras (mayusculas o minusculas, con
+                   o sin tilde), digitos o guion bajo.
+                   Debe iniciar en minuscula o guion bajo. Admite tildes y la
+                   letra n con virgulilla (exigencia 2.1 del enunciado). El
+                   generador de codigo los translitera a snake_case ASCII
+                   porque Gleam solo acepta identificadores ASCII.
+
+  NUM_ENTERO       [0-9]+
+  NUM_REAL         [0-9]+\.[0-9]+          (el punto decimal es obligatorio en
+                                           ambos lados, igual que en Gleam)
+  CADENA_LITERAL   "([^"\\]|\\.)*"         comillas dobles, escapes con \
+                                           (no puede cruzar un salto de linea)
+
+  $                Marcador de fin de entrada (no es un lexema).
+
+
+================================================================================
+  3 - PRODUCCIONES BNF
+  Ordenadas de <programa> (arriba) a las expresiones atomicas (abajo).
+  Sin recursividad por la izquierda y factorizadas por la izquierda.
+  Los terminales literales van entre comillas o en minuscula sin <>.
+  e denota la cadena vacia (epsilon).
+================================================================================
+
+/* ---------------------------------------------------------------- */
+/* 3.1  Programa y declaraciones                                    */
+/* ---------------------------------------------------------------- */
+
+<programa>              ::= <lista_declaraciones> $
+
+<lista_declaraciones>   ::= <declaracion> <lista_declaraciones>
+                          | e
+
+<declaracion>           ::= <def_funcion>
+                          | <sentencia>
+
+/* ---------------------------------------------------------------- */
+/* 3.2  Definicion de funciones                                     */
+/* ---------------------------------------------------------------- */
+
+<def_funcion>           ::= hagale_pues IDENTIFICADOR
+                            "(" <parametros> ")"
+                            <tipo_retorno>
+                            dele_pues
+                                <bloque>
+                            ya_quedo
+
+<tipo_retorno>          ::= pa_que_lleve <tipo>
+                          | e
+
+<parametros>            ::= <param_lista>
+                          | e
+
+<param_lista>           ::= <tipo> IDENTIFICADOR <param_resto>
+
+<param_resto>           ::= "," <tipo> IDENTIFICADOR <param_resto>
+                          | e
+
+<tipo>                  ::= numerito
+                          | quebradito
+                          | cuento
+                          | siono
+
+/* ---------------------------------------------------------------- */
+/* 3.3  Bloques y sentencias                                        */
+/* ---------------------------------------------------------------- */
+
+<bloque>                ::= <sentencia> <lista_sentencias>
+
+<lista_sentencias>      ::= <sentencia> <lista_sentencias>
+                          | e
+
+<sentencia>             ::= <sent_declaracion>
+                          | <sent_lectura>
+                          | <sent_impresion>
+                          | <sent_si>
+                          | <sent_mientras>
+                          | <sent_para>
+                          | <sent_pillemos>
+                          | <sent_retornar>
+                          | <sent_llamada>
+
+/* Declaracion / asignacion. El tipo es opcional (se infiere).       */
+<sent_declaracion>      ::= pille_pues <tipo_opcional> IDENTIFICADOR
+                            "=" <expresion>
+
+<tipo_opcional>         ::= <tipo>
+                          | e
+
+<sent_lectura>          ::= escuche_pues "(" IDENTIFICADOR ")"
+
+<sent_impresion>        ::= hable_pues "(" <expresion> ")"
+
+<sent_retornar>         ::= entregue_pues <expresion>
+
+/* Llamada a funcion usada como sentencia (se descarta su valor).    */
+<sent_llamada>          ::= IDENTIFICADOR "(" <argumentos> ")"
+
+/* ---------------------------------------------------------------- */
+/* 3.4  Condicional  (sin recursividad izquierda)                   */
+/* ---------------------------------------------------------------- */
+
+<sent_si>               ::= si_acaso <expresion> entonces_pues
+                                <bloque>
+                            <rama_sino>
+                            asi_quedo
+
+<rama_sino>             ::= sino_pues <bloque>
+                          | e
+
+/* ---------------------------------------------------------------- */
+/* 3.5  Repeticion por condicion  (while)                           */
+/* ---------------------------------------------------------------- */
+
+<sent_mientras>         ::= mientras_que <expresion> dele_pues
+                                <bloque>
+                            hasta_ahi
+
+/* ---------------------------------------------------------------- */
+/* 3.6  Repeticion con variable de control  (for)                   */
+/* ---------------------------------------------------------------- */
+
+<sent_para>             ::= pa_cada IDENTIFICADOR
+                            desde <expresion>
+                            hasta <expresion>
+                            <paso_opcional>
+                            dele_pues
+                                <bloque>
+                            listo_pues
+
+<paso_opcional>         ::= de_a <expresion>
+                          | e
+
+/* ---------------------------------------------------------------- */
+/* 3.7  Calce de patrones  (equivale al `case` de Gleam)            */
+/* ---------------------------------------------------------------- */
+
+<sent_pillemos>         ::= pillemos <expresion> "{" <lista_casos> "}"
+
+<lista_casos>           ::= <caso> <lista_casos_resto>
+
+<lista_casos_resto>     ::= <caso> <lista_casos_resto>
+                          | e
+
+<caso>                  ::= <patron> pa_que_lleve <cuerpo_caso>
+
+<cuerpo_caso>           ::= "{" <bloque> "}"
+                          | <sentencia>
+
+<patron>                ::= NUM_ENTERO
+                          | NUM_REAL
+                          | CADENA_LITERAL
+                          | sizas
+                          | naranjas
+                          | IDENTIFICADOR      /* enlaza el valor (catch-all) */
+                          | "_"                /* comodin, descarta el valor  */
+
+/* ---------------------------------------------------------------- */
+/* 3.8  Expresiones                                                 */
+/*      Jerarquia de precedencia, de menor a mayor:                 */
+/*        o_que < y_tambien < igualdad < relacional < <>            */
+/*              < +,- < *,/,% < ** < unarios < primaria             */
+/*      Toda recursividad izquierda fue eliminada con la tecnica    */
+/*      A ::= B A'   /   A' ::= op B A' | e                         */
+/* ---------------------------------------------------------------- */
+
+<expresion>             ::= <expr_o>
+
+<expr_o>                ::= <expr_y> <expr_o_p>
+<expr_o_p>              ::= o_que <expr_y> <expr_o_p>
+                          | e
+
+<expr_y>                ::= <expr_igualdad> <expr_y_p>
+<expr_y_p>              ::= y_tambien <expr_igualdad> <expr_y_p>
+                          | e
+
+<expr_igualdad>         ::= <expr_relacional> <expr_igualdad_p>
+<expr_igualdad_p>       ::= <op_igualdad> <expr_relacional> <expr_igualdad_p>
+                          | e
+<op_igualdad>           ::= igualito
+                          | distinto
+
+<expr_relacional>       ::= <expr_concat> <expr_relacional_p>
+<expr_relacional_p>     ::= <op_relacional> <expr_concat> <expr_relacional_p>
+                          | e
+<op_relacional>         ::= ">"
+                          | "<"
+                          | ">="
+                          | "<="
+
+<expr_concat>           ::= <expr_aditiva> <expr_concat_p>
+<expr_concat_p>         ::= "<>" <expr_aditiva> <expr_concat_p>
+                          | e
+
+<expr_aditiva>          ::= <expr_multiplicativa> <expr_aditiva_p>
+<expr_aditiva_p>        ::= "+" <expr_multiplicativa> <expr_aditiva_p>
+                          | "-" <expr_multiplicativa> <expr_aditiva_p>
+                          | e
+
+<expr_multiplicativa>   ::= <expr_potencia> <expr_multiplicativa_p>
+<expr_multiplicativa_p> ::= "*" <expr_potencia> <expr_multiplicativa_p>
+                          | "/" <expr_potencia> <expr_multiplicativa_p>
+                          | "%" <expr_potencia> <expr_multiplicativa_p>
+                          | e
+
+/* La potencia asocia a la DERECHA: 2 ** 3 ** 2  =  2 ** (3 ** 2)   */
+<expr_potencia>         ::= <expr_unaria> <expr_potencia_p>
+<expr_potencia_p>       ::= "**" <expr_potencia>
+                          | e
+
+<expr_unaria>           ::= nanai <expr_unaria>
+                          | "-" <expr_unaria>
+                          | <expr_primaria>
+
+<expr_primaria>         ::= NUM_ENTERO
+                          | NUM_REAL
+                          | CADENA_LITERAL
+                          | sizas
+                          | naranjas
+                          | IDENTIFICADOR <sufijo_id>
+                          | "(" <expresion> ")"
+
+/* Factorizacion por la izquierda: variable y llamada comparten el   */
+/* prefijo IDENTIFICADOR, por eso se separa el sufijo.               */
+<sufijo_id>             ::= "(" <argumentos> ")"
+                          | e
+
+<argumentos>            ::= <arg_lista>
+                          | e
+
+<arg_lista>             ::= <expresion> <arg_resto>
+
+<arg_resto>             ::= "," <expresion> <arg_resto>
+                          | e
+
+
+================================================================================
+  4 - VERIFICACION DE LA CONDICION LL(1)
+================================================================================
+
+Una gramatica es LL(1) si para todo no terminal A con producciones
+A -> a1 | a2 | ... | an se cumple:
+
+  (C1) PRIMERO(ai) interseccion PRIMERO(aj) = vacio     para todo i != j
+  (C2) si e pertenece a PRIMERO(ai), entonces
+       PRIMERO(aj) interseccion SIGUIENTE(A) = vacio    para todo j != i
+
+--- 4.1 Ausencia de recursividad por la izquierda -----------------------------
+
+Se revisaron las 54 reglas de produccion (108 alternativas en total).
+Ninguna tiene la forma A -> A alfa.
+Las cinco cadenas de expresiones que en la version anterior de este documento
+eran recursivas por la izquierda
+
+    <expresion_aritmetica> ::= <expresion_aritmetica> "+" <termino>
+    <termino_aritmetico>   ::= <termino_aritmetico> "*" <factor>
+    <expresion_logica>     ::= <expresion_logica> o_que <termino_logico>
+    <termino_logico>       ::= <termino_logico> y_tambien <factor_logico>
+    <expresion_cadena>     ::= <expresion_cadena> "<>" <cadena_valor>
+
+fueron transformadas al esquema  A ::= B A'  /  A' ::= op B A' | e , que
+preserva el lenguaje generado y la asociatividad izquierda de los operadores
+(la asociatividad se reconstruye al construir el arbol durante el analisis
+sintactico). Lo mismo se hizo con <lista_instrucciones> y <lista_casos>.
+
+--- 4.2 Conjuntos PRIMERO de los no terminales criticos -----------------------
+
+PRIMERO(<tipo>)
+  = { numerito, quebradito, cuento, siono }
+
+PRIMERO(<def_funcion>)
+  = { hagale_pues }
+
+PRIMERO(<sentencia>)
+  = { pille_pues, escuche_pues, hable_pues, si_acaso, mientras_que,
+      pa_cada, pillemos, entregue_pues, IDENTIFICADOR }
+  Las nueve alternativas de <sentencia> arrancan cada una con un terminal
+  DISTINTO, por lo que sus conjuntos PRIMERO son disjuntos dos a dos. (C1) OK.
+
+PRIMERO(<declaracion>)
+  = { hagale_pues } union PRIMERO(<sentencia>)
+  hagale_pues no pertenece a PRIMERO(<sentencia>). (C1) OK.
+
+PRIMERO(<expr_primaria>)
+  = { NUM_ENTERO, NUM_REAL, CADENA_LITERAL, sizas, naranjas,
+      IDENTIFICADOR, "(" }
+
+PRIMERO(<expr_unaria>)
+  = { nanai, "-" } union PRIMERO(<expr_primaria>)
+  Las tres alternativas empiezan con nanai, con "-" y con PRIMERO(primaria)
+  respectivamente; nanai y "-" no estan en PRIMERO(<expr_primaria>). (C1) OK.
+
+PRIMERO(<expresion>) = PRIMERO(<expr_unaria>)
+
+PRIMERO(<patron>)
+  = { NUM_ENTERO, NUM_REAL, CADENA_LITERAL, sizas, naranjas,
+      IDENTIFICADOR, "_" }
+  Siete alternativas con terminales distintos. (C1) OK.
+
+--- 4.3 Conjuntos SIGUIENTE de los no terminales anulables --------------------
+
+SIGUIENTE(<lista_declaraciones>) = { $ }
+SIGUIENTE(<lista_sentencias>)    = { ya_quedo, asi_quedo, sino_pues,
+                                     hasta_ahi, listo_pues, "}" }
+SIGUIENTE(<rama_sino>)           = { asi_quedo }
+SIGUIENTE(<paso_opcional>)       = { dele_pues }
+SIGUIENTE(<tipo_retorno>)        = { dele_pues }
+SIGUIENTE(<tipo_opcional>)       = { IDENTIFICADOR }
+SIGUIENTE(<parametros>)          = { ")" }
+SIGUIENTE(<param_resto>)         = { ")" }
+SIGUIENTE(<argumentos>)          = { ")" }
+SIGUIENTE(<arg_resto>)           = { ")" }
+SIGUIENTE(<sufijo_id>)           = SIGUIENTE(<expr_primaria>)
+                                 = todos los operadores binarios union
+                                   { ")", "}", ",", entonces_pues,
+                                     dele_pues, hasta, de_a, "{", $ } union
+                                   PRIMERO(<sentencia>)
+SIGUIENTE(<lista_casos_resto>)   = { "}" }
+
+--- 4.4 Comprobacion de (C2) en cada produccion anulable ----------------------
+
+  NO TERMINAL             PRIMERO(alt. no vacia)      SIGUIENTE       DISJUNTOS
+  ----------------------- --------------------------- --------------- ---------
+  <lista_declaraciones>   PRIMERO(<declaracion>)      { $ }           SI
+  <lista_sentencias>      PRIMERO(<sentencia>)        cierres + "}"   SI (*1)
+  <rama_sino>             { sino_pues }               { asi_quedo }   SI
+  <paso_opcional>         { de_a }                    { dele_pues }   SI
+  <tipo_retorno>          { pa_que_lleve }            { dele_pues }   SI
+  <tipo_opcional>         PRIMERO(<tipo>)             { IDENTIF. }    SI (*2)
+  <parametros>            PRIMERO(<tipo>)             { ")" }         SI
+  <param_resto>           { "," }                     { ")" }         SI
+  <argumentos>            PRIMERO(<expresion>)        { ")" }         SI (*3)
+  <arg_resto>             { "," }                     { ")" }         SI
+  <sufijo_id>             { "(" }                     SIG(primaria)   SI (*4)
+  <lista_casos_resto>     PRIMERO(<caso>)             { "}" }         SI
+  <expr_o_p>              { o_que }                   SIG(<expr_o>)   SI
+  <expr_y_p>              { y_tambien }               SIG(<expr_y>)   SI
+  <expr_igualdad_p>       { igualito, distinto }      ...             SI
+  <expr_relacional_p>     { >, <, >=, <= }            ...             SI
+  <expr_concat_p>         { "<>" }                    ...             SI
+  <expr_aditiva_p>        { "+", "-" }                ...             SI (*5)
+  <expr_multiplicativa_p> { "*", "/", "%" }           ...             SI
+  <expr_potencia_p>       { "**" }                    ...             SI
+
+  (*1) Las palabras de cierre ya_quedo, asi_quedo, sino_pues, hasta_ahi,
+       listo_pues son reservadas: ninguna sentencia puede empezar con ellas,
+       ni pueden confundirse con un IDENTIFICADOR.
+
+  (*2) numerito, quebradito, cuento y siono son palabras reservadas, de modo
+       que el lexer nunca las clasifica como IDENTIFICADOR. Al ver
+       `pille_pues numerito x = ...` el token numerito solo puede venir de
+       <tipo_opcional>; al ver `pille_pues x = ...` el token IDENTIFICADOR
+       obliga a tomar la alternativa vacia.
+
+  (*3) ")" no pertenece a PRIMERO(<expresion>): ninguna expresion empieza con
+       parentesis de cierre.
+
+  (*4) Este es el unico punto donde hizo falta factorizacion por la izquierda:
+       `contador` y `sumar(1, 2)` comparten el prefijo IDENTIFICADOR. Al
+       extraer <sufijo_id> la decision se toma con un solo simbolo de
+       anticipacion: si el siguiente token es "(" es una llamada, en cualquier
+       otro caso es una variable. "(" no aparece nunca en SIGUIENTE de una
+       expresion primaria porque no existe ninguna sentencia ni operador que
+       comience con parentesis de apertura despues de una expresion completa.
+
+  (*5) El "-" binario de <expr_aditiva_p> y el "-" unario de <expr_unaria>
+       no compiten: nunca son alternativas del mismo no terminal. Cuando el
+       analizador esta en <expr_aditiva_p> ya consumio un operando completo,
+       de modo que el "-" solo puede leerse como resta.
+
+--- 4.5 Conclusion ------------------------------------------------------------
+
+No se detecto ningun conflicto PRIMERO/PRIMERO ni PRIMERO/SIGUIENTE.
+La gramatica es LL(1) y admite un analizador descendente recursivo con un
+unico token de anticipacion, sin retroceso.
+
+
+================================================================================
+  5 - EJEMPLOS DE PROGRAMAS VALIDOS
+================================================================================
+
+--- 5.1 Entrada, aritmetica y salida ------------------------------------------
+
+    // Le sube dos anios a la edad que digite el usuario
+    escuche_pues(edad)
+    pille_pues numerito calculo = (edad * 2) + 5
+    pille_pues cuento mensaje = "El resultado es: " <> calculo
+    hable_pues(mensaje)
+
+--- 5.2 Funcion con parametros, condicional y retorno -------------------------
+
+    hagale_pues clasificar(numerito nota) pa_que_lleve cuento dele_pues
+        si_acaso nota >= 45 y_tambien nota <= 50 entonces_pues
+            entregue_pues "Sobresaliente, mijo"
+        sino_pues
+            si_acaso nota >= 30 entonces_pues
+                entregue_pues "Pasaste raspando"
+            sino_pues
+                entregue_pues "Se quemo, parcero"
+            asi_quedo
+        asi_quedo
+    ya_quedo
+
+    hable_pues(clasificar(47))
+
+--- 5.3 Bucle mientras con acumulador -----------------------------------------
+
+    // Suma de los primeros n numeros naturales
+    hagale_pues sumatoria(numerito n) pa_que_lleve numerito dele_pues
+        pille_pues numerito acumulado = 0
+        pille_pues numerito i = 1
+        mientras_que i <= n dele_pues
+            pille_pues acumulado = acumulado + i
+            pille_pues i = i + 1
+        hasta_ahi
+        entregue_pues acumulado
+    ya_quedo
+
+--- 5.4 Bucle para con paso, modulo y potencia --------------------------------
+
+    pa_cada k desde 0 hasta 20 de_a 2 dele_pues
+        si_acaso k % 3 igualito 0 entonces_pues
+            hable_pues("Multiplo de tres: " <> k)
+        asi_quedo
+    listo_pues
+
+    pille_pues quebradito area = 3.1416 * radio ** 2
+    hable_pues(area)
+
+--- 5.5 Calce de patrones y operadores logicos --------------------------------
+
+    pillemos resultado {
+        10       pa_que_lleve hable_pues("Sacaste diez, que elegancia")
+        "error"  pa_que_lleve hable_pues("Algo salio mal, mijo")
+        sizas    pa_que_lleve {
+                     hable_pues("Todo bien")
+                     hable_pues("Todo correcto")
+                 }
+        _        pa_que_lleve hable_pues("No se que paso ahi")
+    }
+
+    pille_pues siono valido = nanai (edad < 18) o_que tiene_permiso
+
+--- 5.6 Programa completo de mediana complejidad ------------------------------
+
+    // Determina si un numero es primo y lista los primos hasta un limite
+    hagale_pues es_primo(numerito n) pa_que_lleve siono dele_pues
+        si_acaso n < 2 entonces_pues
+            entregue_pues naranjas
+        asi_quedo
+        pille_pues numerito d = 2
+        mientras_que d * d <= n dele_pues
+            si_acaso n % d igualito 0 entonces_pues
+                entregue_pues naranjas
+            asi_quedo
+            pille_pues d = d + 1
+        hasta_ahi
+        entregue_pues sizas
+    ya_quedo
+
+    hagale_pues listar_primos(numerito limite) dele_pues
+        pa_cada n desde 2 hasta limite dele_pues
+            si_acaso es_primo(n) entonces_pues
+                hable_pues("Primo encontrado: " <> n)
+            asi_quedo
+        listo_pues
+    ya_quedo
+
+    escuche_pues(tope)
+    listar_primos(tope)
+
+
+================================================================================
+  6 - EJEMPLOS DE PROGRAMAS INVALIDOS
+================================================================================
+
+--- 6.1 Errores LEXICOS (los detecta el analizador de esta entrega) -----------
+
+    pille_pues x = 5 @ 3          // '@' no corresponde a ningun token
+    pille_pues Total = 10         // 'T' mayuscula: no inicia un IDENTIFICADOR
+    pille_pues y = "sin cerrar    // literal de cadena sin comilla final
+    pille_pues z = 3.             // NUM_REAL exige digitos a ambos lados
+    hable_pues(a $ b)             // '$' no pertenece al alfabeto del lenguaje
+
+--- 6.2 Errores SINTACTICOS (los detectara el parser de la entrega 2) ---------
+
+    si_acaso x > 3 entonces_pues        // falta asi_quedo
+        hable_pues("hola")
+
+    hagale_pues f(x) dele_pues          // parametro sin anotacion de tipo
+        entregue_pues x
+    ya_quedo
+
+    mientras_que i < 10                 // falta dele_pues
+        pille_pues i = i + 1
+    hasta_ahi
+
+    pa_cada i desde 1 dele_pues         // falta la clausula hasta
+        hable_pues(i)
+    listo_pues
+
+    pillemos x { }                      // <lista_casos> exige al menos un caso
+
+--- 6.3 Errores SEMANTICOS (los detectara el analizador de la entrega 3) ------
+
+    pille_pues numerito x = "hola"      // tipo declarado != tipo de la expresion
+    pille_pues y = 3 + 2.5              // Gleam no mezcla Int con Float
+    hable_pues(variable_no_declarada)   // identificador fuera de alcance
+    pille_pues z = sumar(1)             // aridad incorrecta en la llamada
+
+
+================================================================================
+  7 - JUSTIFICACION DE COHERENCIA CON EL LENGUAJE DESTINO (GLEAM)
+================================================================================
+
+--- 7.1 Caracteristicas de Gleam que condicionaron el diseno ------------------
+
+  Paradigma      Funcional puro. No existen sentencias, todo es expresion.
+  Mutabilidad    Ninguna. No hay reasignacion de variables.
+  Tipado         Estatico, fuerte, con inferencia. Int y Float son tipos
+                 disjuntos y NO se convierten implicitamente.
+  Control        Solo `case`. No hay if/else, ni while, ni for, ni break,
+                 ni continue, ni return anticipado.
+  Repeticion     Unicamente por recursion (el BEAM optimiza la recursion de
+                 cola) o mediante las funciones de orden superior de
+                 gleam/list.
+  Subprogramas   `fn` y `pub fn`, con anotacion de tipo opcional pero
+                 verificada. Admite funciones anonimas y clausuras.
+  Modulo         Cada archivo es un modulo; `pub fn main()` es el punto de
+                 entrada.
+
+--- 7.2 Decisiones de diseno derivadas ----------------------------------------
+
+  1. CUATRO TIPOS BASICOS Y NADA MAS.
+     numerito/quebradito/cuento/siono calzan uno a uno con Int/Float/String/
+     Bool. No se incluyeron tipos que Gleam no tenga de forma nativa.
+
+  2. ENTERO Y REAL SEPARADOS EN EL LEXER.
+     El analizador emite tokens distintos NUM_ENTERO y NUM_REAL. Es necesario
+     porque Gleam usa operadores diferentes para cada tipo (+ contra +., /
+     contra /.). Un solo token "numero" haria imposible elegir el operador
+     correcto al generar codigo.
+
+  3. UN SOLO JUEGO DE OPERADORES ARITMETICOS EN LA FUENTE.
+     Paisascript escribe siempre + - * / y el analizador SEMANTICO decide si
+     genera `+` o `+.` a partir del tipo de los operandos. Se prefiere asi
+     porque obligar al programador a escribir `+.` traicionaria el espiritu
+     coloquial del lenguaje, y la informacion de tipos ya esta disponible
+     gracias a las anotaciones y a la inferencia.
+
+  4. INMUTABILIDAD MEDIANTE SHADOWING.
+     Paisascript no tiene reasignacion: `pille_pues x = x + 1` crea un enlace
+     nuevo, tal como `let x = x + 1` en Gleam. Por eso NO existe una sentencia
+     de asignacion sin `pille_pues`: se evita prometer una mutacion que el
+     destino no puede cumplir.
+
+  5. CIERRES EXPLICITOS DE BLOQUE.
+     ya_quedo, asi_quedo, hasta_ahi y listo_pues hacen la gramatica LL(1) sin
+     tokens de indentacion, y se traducen directamente a la llave de cierre
+     de Gleam.
+
+  6. `pillemos` ES EL CONSTRUCTO PRIMARIO.
+     Se conservo el calce de patrones como estructura de control de primera
+     clase porque es literalmente el `case` de Gleam: la traduccion es
+     token a token.
+
+  7. `<>` SE TOMO PRESTADO DE GLEAM.
+     El operador de concatenacion es identico en fuente y destino.
+
+--- 7.3 Tabla de traduccion Paisascript -> Gleam ------------------------------
+
+  PAISASCRIPT                              GLEAM
+  ---------------------------------------- ------------------------------------
+  hagale_pues f(numerito a)                pub fn f(a: Int) -> Int {
+    pa_que_lleve numerito dele_pues          ...
+    ...                                    }
+  ya_quedo
+
+  pille_pues numerito x = 5                let x: Int = 5
+  pille_pues x = x + 1                     let x = x + 1        (shadowing)
+
+  hable_pues(m)                            io.println(m)
+  escuche_pues(x)                          let assert Ok(x) = erlang.get_line("")
+
+  si_acaso c entonces_pues A               case c {
+  sino_pues B asi_quedo                      True  -> { A }
+                                             False -> { B }
+                                           }
+
+  pillemos e { p pa_que_lleve S ... }      case e { p -> S ... }
+
+  mientras_que c dele_pues B hasta_ahi     fn bucle(estado) {
+                                             case c {
+                                               True  -> bucle(B')
+                                               False -> estado
+                                             }
+                                           }
+                                           (recursion de cola generada)
+
+  pa_cada i desde a hasta b dele_pues B    list.range(a, b)
+  listo_pues                               |> list.each(fn(i) { B })
+
+  pa_cada i desde a hasta b de_a p         (recursion de cola con incremento p,
+  dele_pues B listo_pues                   list.range no admite paso)
+
+  entregue_pues e                          e  como ultima expresion del cuerpo;
+                                           un retorno anticipado se reestructura
+                                           en las ramas del `case`
+
+  a + b   (Int / Float)                    a + b   |   a +. b
+  a - b                                    a - b   |   a -. b
+  a * b                                    a * b   |   a *. b
+  a / b                                    a / b   |   a /. b
+  a % b   (solo Int)                       a % b
+  a ** b                                   int.power(a, b) | float.power(a, b)
+                                           (devuelven Result; el generador las
+                                           envuelve con result.unwrap)
+  a <> b                                   a <> b, insertando int.to_string /
+                                           float.to_string si algun operando
+                                           no es String (ver 7.5)
+  a igualito b                             a == b
+  a distinto b                             a != b
+  a y_tambien b                            a && b
+  a o_que b                                a || b
+  nanai a                                  !a
+  sizas / naranjas                         True / False
+  numerito quebradito cuento siono         Int Float String Bool
+  // comentario                            // comentario
+
+--- 7.4 Las tres construcciones que NO son directas ---------------------------
+
+El enunciado (2, puntos 5, 6, 7 y 10) exige si/sino, mientras, para y
+retornar. Gleam no tiene ninguno de los cuatro. Se incluyeron de todos modos
+porque son requisito, y porque su traduccion es mecanica y perfectamente
+definida. Ese trabajo lo hara el generador de codigo de la entrega final:
+
+  a) `si_acaso` es azucar sintactico sobre `case` con los patrones True/False,
+     que es exactamente la forma idiomatica de escribir un condicional en
+     Gleam.
+
+  b) `mientras_que` se traduce a una funcion auxiliar recursiva de cola cuyos
+     parametros son las variables que el cuerpo redefine. El BEAM ejecuta la
+     recursion de cola en espacio constante, asi que el resultado no es solo
+     correcto sino tan eficiente como un bucle.
+
+  c) `pa_cada` con paso 1 se traduce a `list.range` compuesto con `list.each`
+     o `list.fold`; con paso distinto de 1 se traduce a una funcion recursiva
+     de cola, porque `list.range` de Gleam no admite incremento.
+
+  d) `entregue_pues` en posicion final es simplemente la ultima expresion del
+     cuerpo. En posicion anticipada (como en `es_primo` del 5.6) se elimina
+     reestructurando el flujo: la rama que retorna produce el valor y la rama
+     complementaria contiene el resto del cuerpo. Esta transformacion es
+     siempre posible porque el grafo de flujo de Paisascript es reducible: no
+     hay saltos arbitrarios, ni break, ni continue, ni goto.
+
+--- 7.5 El operador `<>` es mas permisivo en la fuente que en el destino ------
+
+En Gleam, `<>` exige String en AMBOS operandos: `"n = " <> 5` es un error de
+tipos. Paisascript si admite esa mezcla, y el generador inserta la conversion:
+
+    Paisascript   "El resultado es: " <> calculo        (calculo: numerito)
+    Gleam         "El resultado es: " <> int.to_string(calculo)
+
+Se decidio asi porque obligar a convertir a mano traicionaria la naturalidad
+coloquial del lenguaje, y el tipo de cada operando ya se conoce en el arbol
+gracias a las anotaciones y a la inferencia. Es el unico punto donde la fuente
+es deliberadamente mas permisiva que el destino; en todo lo demas Paisascript
+es un subconjunto de lo que Gleam puede expresar.
+
+--- 7.6 Estado del proyecto ---------------------------------------------------
+
+  Analisis lexico        lexer.py + main.py                ENTREGA 1 completo
+  Gramatica BNF LL(1)    este documento                    ENTREGA 1 completo
+  Analisis sintactico    parser descendente recursivo      entrega 2
+  Analisis semantico     tabla de simbolos, tipos Int/Float entrega 3
+  Generacion de codigo   emisor de Gleam                   entrega final
+
+El detalle completo de la traduccion, con ejemplos trabajados de punta a
+punta, esta en el documento MAPEO_GLEAM.md.
+
+================================================================================
+  FIN DEL DOCUMENTO
+================================================================================
