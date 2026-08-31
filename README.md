@@ -26,31 +26,67 @@ la gramática libre de contexto en notación BNF y el analizador léxico.
 
 ## Ejecutar el analizador
 
+Hay **dos interfaces** sobre el mismo analizador. Se recomienda la web para la
+sustentación.
+
+### Interfaz web (Streamlit)
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Se abre en `http://localhost:8501`. Si `streamlit` no está en el PATH:
+
+```bash
+py -3.12 -m streamlit run app.py
+```
+
+### Publicar en Streamlit Community Cloud
+
+La app no usa disco ni estado de servidor, así que se despliega sin cambios:
+
+1. Subir el repositorio a GitHub (`git push`).
+2. Entrar a [share.streamlit.io](https://share.streamlit.io) con la cuenta de
+   GitHub y elegir **New app**.
+3. Seleccionar el repositorio y la rama, y poner `app.py` como *Main file path*.
+4. **Deploy**. Streamlit lee `requirements.txt` e instala las dependencias solo.
+
+El tema oscuro de `.streamlit/config.toml` se aplica también en la nube. La
+pestaña «Referencia» lee la gramática y el mapeo con rutas relativas al propio
+`app.py`, de modo que funcionan igual en local y desplegado.
+
+### Interfaz de consola
+
 ```bash
 python main.py
 ```
 
 No requiere dependencias externas: solo la biblioteca estándar de Python 3.8+.
 
-El menú ofrece tres modos de entrada:
+### Modos de entrada
+
+Ambas interfaces ofrecen los mismos tres (requisito 11 del enunciado):
 
 1. **Cadena predefinida** — ocho programas de ejemplo que cubren E/S, funciones,
    ambos bucles, calce de patrones, identificadores con tildes y un caso con
    errores léxicos deliberados.
-2. **Cadena libre** — se digita el código directamente en la consola y se
-   termina con una línea que diga `fin`.
-3. **Archivo `.paisa`** — se indica la ruta de un archivo en disco.
+2. **Cadena libre** — se escribe el código directamente. En consola se termina
+   con una línea que diga `fin`.
+3. **Archivo `.paisa`** — se sube o se indica la ruta.
 
-Para cada entrada el programa muestra:
+### Qué muestra
 
-| Sección | Contenido |
+| Vista | Contenido |
 | :--- | :--- |
-| 1. Código segmentado | El fuente reimpreso con cada lexema pintado según su categoría |
-| 2. Flujo de tokens | La secuencia de fichas `[ lexema \| TIPO ]` a color |
-| 3. Tabla de símbolos | Lexema, TokenType, categoría, **fila** y **columna** de cada token |
-| 4. Identificadores | Identificadores distintos y todas sus posiciones |
-| 5. Errores léxicos | Fila, columna, causa y la línea con un `^` bajo el error |
-| 6. Resumen | Histograma de tokens por categoría |
+| Código segmentado | El fuente reimpreso con cada lexema pintado según su categoría |
+| Flujo de tokens | La secuencia de fichas `lexema · TokenType` a color |
+| Tabla de símbolos | Lexema, TokenType, categoría, **fila** y **columna** de cada token (filtrable y descargable en CSV en la web) |
+| Identificadores | Identificadores distintos y todas sus posiciones |
+| Errores léxicos | Fila, columna, causa y la línea con un `^` bajo el error |
+| Resumen | Distribución de tokens por categoría y los más frecuentes |
+| Traducción a Gleam | En qué se convierte cada token, y cuáles exigen reestructurar el árbol *(solo web)* |
+| Referencia | La gramática, el mapeo y este README dentro de la app *(solo web)* |
 
 ---
 
@@ -60,10 +96,29 @@ Para cada entrada el programa muestra:
 | :--- | :--- |
 | `gramatica_BNF_Paisascript.txt` | Gramática BNF completa: descripción informal, terminales por categoría, 54 reglas de producción sin recursividad izquierda, **verificación LL(1)**, ejemplos válidos e inválidos y justificación de coherencia con Gleam |
 | `lexer.py` | **Módulo reutilizable** del analizador léxico. No imprime ni lee nada |
-| `main.py` | Interfaz de consola: menús, colores, tablas y reporte de errores |
+| `app.py` | Interfaz web en Streamlit |
+| `main.py` | Interfaz de consola con colores ANSI |
 | `ejemplos.py` | Las ocho cadenas predefinidas |
+| `mapeo_gleam.py` | Correspondencia token → construcción de Gleam, en código |
 | `MAPEO_GLEAM.md` | Traducción trabajada de cada constructo a Gleam |
+| `requirements.txt` | Dependencias de la interfaz web |
+| `.streamlit/config.toml` | Tema de la interfaz web |
 | `Tabla_analisis_lexico.xlsx` | Tabla de análisis léxico |
+
+### Arquitectura
+
+Las dos interfaces son intercambiables porque ninguna contiene lógica de
+análisis:
+
+```
+main.py  (consola, ANSI)  ──┐
+                            ├──►  lexer.py  ──►  mapeo_gleam.py
+app.py   (web, Streamlit) ──┘     (sin cambios)
+```
+
+Esa independencia **es** el requisito 15 del enunciado, y aquí está demostrada
+en la práctica: `app.py` se construyó después, sin modificar una sola línea de
+`lexer.py`. El analizador sintáctico de la entrega 2 será un tercer consumidor.
 
 ---
 
@@ -281,11 +336,11 @@ Las traducciones trabajadas de punta a punta están en
 
 | Requisito | Dónde |
 | :--- | :--- |
-| Módulo reutilizable | `lexer.py`, sin dependencias de la interfaz |
-| Ingreso libre o predefinido | `main.py`, opciones 1, 2 y 3 |
-| Visualización gráfica de tokens con colores | Secciones 1 y 2 de la salida |
-| Tabla de símbolos con fila y columna | Sección 3 |
-| Reporte de errores sin abortar | Sección 5 |
+| Módulo reutilizable | `lexer.py`, consumido por dos interfaces sin modificarlo |
+| Ingreso libre o predefinido | `app.py` y `main.py`, los tres modos |
+| Visualización gráfica de tokens con colores | Pestañas «Código segmentado» y «Flujo de tokens» |
+| Tabla de símbolos con fila y columna | Pestaña «Tabla de símbolos», descargable en CSV |
+| Reporte de errores sin abortar | Pestaña «Errores léxicos», con cursor bajo el error |
 | Código documentado + README | Este archivo |
 
 ### Capacidades mínimas del §2 del enunciado
