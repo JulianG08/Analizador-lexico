@@ -1,7 +1,7 @@
 """
 Módulo: parser.py
-Descripción: Analizador Sintáctico Descendente Recursivo adaptado a la 
-gramática LL(1) de Paisascript.
+Descripción: Analizador Sintáctico Descendente Recursivo LL(1) para Paisascript.
+Genera el Árbol de Derivación Sintáctica Completo (CST) según la gramática BNF.
 """
 
 class ErrorSintactico(Exception):
@@ -10,7 +10,6 @@ class ErrorSintactico(Exception):
 
 class Parser:
     def __init__(self, tokens):
-        # Filtramos espacios y comentarios si el lexer no lo ha hecho ya
         self.tokens = [
             t for t in tokens 
             if self._obtener_tipo(t) not in ("ESPACIO", "COMENTARIO", "FIN_ARCHIVO", "FIN")
@@ -19,7 +18,7 @@ class Parser:
         self.token_actual = self.tokens[0] if self.tokens else None
 
     # ==========================================
-    # HELPER MAPPING (Léxico Lexer -> Parser)
+    # HELPER MAPPING
     # ==========================================
 
     def _obtener_tipo(self, token=None):
@@ -37,7 +36,6 @@ class Parser:
         return getattr(tok, 'value', str(tok))
 
     def avanzar(self):
-        """Avanza al siguiente token en la secuencia."""
         self.pos += 1
         if self.pos < len(self.tokens):
             self.token_actual = self.tokens[self.pos]
@@ -45,15 +43,14 @@ class Parser:
             self.token_actual = None
 
     def match(self, *esperados):
-        """Verifica coincidencia por nombre de TipoToken o Lexema."""
+        """Consume un token terminal y retorna un nodo terminal para el árbol."""
         if self.token_actual:
             tipo = self._obtener_tipo()
             lexema = self._obtener_lexema()
 
             if tipo in esperados or lexema in esperados:
-                token_consumido = self.token_actual
                 self.avanzar()
-                return token_consumido
+                return {"tipo": f"'{lexema}'", "es_terminal": True, "hijos": []}
 
         fila = getattr(self.token_actual, 'fila', getattr(self.token_actual, 'linea', '?'))
         col = getattr(self.token_actual, 'columna', '?')
@@ -65,8 +62,10 @@ class Parser:
             f"Se esperaba '{esperados_str}', pero se encontró '{encontrado}'"
         )
 
+    def _nodo_eps(self):
+        return {"tipo": "ε", "es_terminal": True, "hijos": []}
+
     def parse(self):
-        """Punto de entrada principal."""
         return self.parse_programa()
 
     # ==========================================
@@ -74,92 +73,100 @@ class Parser:
     # ==========================================
 
     def parse_programa(self):
-        declaraciones = []
-        while self.token_actual is not None:
-            declaraciones.append(self.parse_declaracion())
-        return {
-            "tipo": "Programa",
-            "declaraciones": declaraciones
-        }
+        nodo_ld = self.parse_lista_declaraciones()
+        return {"tipo": "<programa>", "es_terminal": False, "hijos": [nodo_ld]}
+
+    def parse_lista_declaraciones(self):
+        if self.token_actual is not None:
+            nodo_dec = self.parse_declaracion()
+            nodo_ld = self.parse_lista_declaraciones()
+            return {"tipo": "<lista_declaraciones>", "es_terminal": False, "hijos": [nodo_dec, nodo_ld]}
+        return {"tipo": "<lista_declaraciones>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_declaracion(self):
-        if self._obtener_tipo() == "KW_FUNCION" or self._obtener_lexema() == "hagale_pues":
-            return self.parse_def_funcion()
+        tipo = self._obtener_tipo()
+        lexema = self._obtener_lexema()
+        if tipo == "KW_FUNCION" or lexema == "hagale_pues":
+            nodo_df = self.parse_def_funcion()
+            return {"tipo": "<declaracion>", "es_terminal": False, "hijos": [nodo_df]}
         else:
-            return self.parse_sentencia()
+            nodo_sent = self.parse_sentencia()
+            return {"tipo": "<declaracion>", "es_terminal": False, "hijos": [nodo_sent]}
 
     # ==========================================
     # 3.2 DEFINICIÓN DE FUNCIONES
     # ==========================================
 
     def parse_def_funcion(self):
-        """hagale_pues IDENTIFICADOR ( <parametros> ) <tipo_retorno> dele_pues <bloque> ya_quedo"""
-        self.match("KW_FUNCION", "hagale_pues")
-        id_tok = self.match("IDENTIFICADOR")
-        self.match("PAR_ABRE", "(")
-        
-        parametros = []
-        if self._obtener_tipo() != "PAR_CIERRA" and self._obtener_lexema() != ")":
-            parametros = self.parse_parametros()
-            
-        self.match("PAR_CIERRA", ")")
-        
-        tipo_retorno = None
-        if self._obtener_tipo() == "KW_FLECHA" or self._obtener_lexema() == "pa_que_lleve":
-            self.avanzar()
-            tipo_retorno = self.parse_tipo()
-
-        self.match("KW_HACER", "dele_pues")
-        bloque = self.parse_bloque(("KW_FIN_FUNCION", "ya_quedo"))
-        self.match("KW_FIN_FUNCION", "ya_quedo")
-
+        tok_hf = self.match("KW_FUNCION", "hagale_pues")
+        tok_id = self.match("IDENTIFICADOR")
+        tok_pa = self.match("PAR_ABRE", "(")
+        nodo_params = self.parse_parametros()
+        tok_pc = self.match("PAR_CIERRA", ")")
+        nodo_tr = self.parse_tipo_retorno()
+        tok_dp = self.match("KW_HACER", "dele_pues")
+        nodo_blq = self.parse_bloque(("KW_FIN_FUNCION", "ya_quedo"))
+        tok_yq = self.match("KW_FIN_FUNCION", "ya_quedo")
         return {
-            "tipo": "DefFuncion",
-            "nombre": self._obtener_lexema(id_tok),
-            "parametros": parametros,
-            "tipo_retorno": tipo_retorno,
-            "cuerpo": bloque
+            "tipo": "<def_funcion>",
+            "es_terminal": False,
+            "hijos": [tok_hf, tok_id, tok_pa, nodo_params, tok_pc, nodo_tr, tok_dp, nodo_blq, tok_yq]
         }
 
+    def parse_tipo_retorno(self):
+        if self._obtener_tipo() == "KW_FLECHA" or self._obtener_lexema() == "pa_que_lleve":
+            tok_pql = self.match("KW_FLECHA", "pa_que_lleve")
+            nodo_t = self.parse_tipo()
+            return {"tipo": "<tipo_retorno>", "es_terminal": False, "hijos": [tok_pql, nodo_t]}
+        return {"tipo": "<tipo_retorno>", "es_terminal": False, "hijos": [self._nodo_eps()]}
+
     def parse_parametros(self):
-        """<tipo> IDENTIFICADOR <param_resto>"""
-        params = []
-        while True:
-            tipo_param = self.parse_tipo()
-            id_param = self.match("IDENTIFICADOR")
-            params.append({"tipo_dato": tipo_param, "nombre": self._obtener_lexema(id_param)})
-            
-            if self._obtener_tipo() == "COMA" or self._obtener_lexema() == ",":
-                self.avanzar()
-            else:
-                break
-        return params
+        if self._obtener_lexema() in ("numerito", "quebradito", "cuento", "siono") or self._obtener_tipo() in ("KW_TIPO_ENTERO", "KW_TIPO_REAL", "KW_TIPO_CADENA", "KW_TIPO_BOOLEANO"):
+            nodo_pl = self.parse_param_lista()
+            return {"tipo": "<parametros>", "es_terminal": False, "hijos": [nodo_pl]}
+        return {"tipo": "<parametros>", "es_terminal": False, "hijos": [self._nodo_eps()]}
+
+    def parse_param_lista(self):
+        nodo_t = self.parse_tipo()
+        tok_id = self.match("IDENTIFICADOR")
+        nodo_pr = self.parse_param_resto()
+        return {"tipo": "<param_lista>", "es_terminal": False, "hijos": [nodo_t, tok_id, nodo_pr]}
+
+    def parse_param_resto(self):
+        if self._obtener_tipo() == "COMA" or self._obtener_lexema() == ",":
+            tok_coma = self.match("COMA", ",")
+            nodo_t = self.parse_tipo()
+            tok_id = self.match("IDENTIFICADOR")
+            nodo_pr = self.parse_param_resto()
+            return {"tipo": "<param_resto>", "es_terminal": False, "hijos": [tok_coma, nodo_t, tok_id, nodo_pr]}
+        return {"tipo": "<param_resto>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_tipo(self):
-        tipo_tok = self.match(
+        tok_t = self.match(
             "KW_TIPO_ENTERO", "KW_TIPO_REAL", "KW_TIPO_CADENA", "KW_TIPO_BOOLEANO",
             "numerito", "quebradito", "cuento", "siono"
         )
-        return self._obtener_lexema(tipo_tok)
+        return {"tipo": "<tipo>", "es_terminal": False, "hijos": [tok_t]}
 
     # ==========================================
     # 3.3 BLOQUES Y SENTENCIAS
     # ==========================================
 
-    def parse_bloque(self, tokens_cierre):
-        """Parsea una lista de sentencias hasta encontrar un token de cierre."""
-        instrucciones = []
-        while self.token_actual:
+    def parse_bloque(self, tokens_cierre=("ya_quedo", "asi_quedo", "hasta_ahi", "listo_pues", "}")):
+        nodo_sent = self.parse_sentencia()
+        nodo_ls = self.parse_lista_sentencias(tokens_cierre)
+        return {"tipo": "<bloque>", "es_terminal": False, "hijos": [nodo_sent, nodo_ls]}
+
+    def parse_lista_sentencias(self, tokens_cierre):
+        if self.token_actual:
             tipo_act = self._obtener_tipo()
             lex_act = self._obtener_lexema()
             if tipo_act in tokens_cierre or lex_act in tokens_cierre:
-                break
-            instrucciones.append(self.parse_sentencia())
-            
-        return {
-            "tipo": "Bloque",
-            "instrucciones": instrucciones
-        }
+                return {"tipo": "<lista_sentencias>", "es_terminal": False, "hijos": [self._nodo_eps()]}
+            nodo_s = self.parse_sentencia()
+            nodo_ls = self.parse_lista_sentencias(tokens_cierre)
+            return {"tipo": "<lista_sentencias>", "es_terminal": False, "hijos": [nodo_s, nodo_ls]}
+        return {"tipo": "<lista_sentencias>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_sentencia(self):
         if not self.token_actual:
@@ -169,365 +176,293 @@ class Parser:
         lexema = self._obtener_lexema()
 
         if tipo == "KW_DECLARACION" or lexema == "pille_pues":
-            return self.parse_sent_declaracion()
+            nodo_sub = self.parse_sent_declaracion()
         elif tipo == "KW_LECTURA" or lexema == "escuche_pues":
-            return self.parse_sent_lectura()
+            nodo_sub = self.parse_sent_lectura()
         elif tipo == "KW_IMPRESION" or lexema == "hable_pues":
-            return self.parse_sent_impresion()
+            nodo_sub = self.parse_sent_impresion()
         elif tipo == "KW_SI" or lexema == "si_acaso":
-            return self.parse_sent_si()
+            nodo_sub = self.parse_sent_si()
         elif tipo == "KW_MIENTRAS" or lexema == "mientras_que":
-            return self.parse_sent_mientras()
+            nodo_sub = self.parse_sent_mientras()
         elif tipo == "KW_PARA" or lexema == "pa_cada":
-            return self.parse_sent_para()
+            nodo_sub = self.parse_sent_para()
         elif tipo == "KW_PILLEMOS" or lexema == "pillemos":
-            return self.parse_sent_pillemos()
+            nodo_sub = self.parse_sent_pillemos()
         elif tipo == "KW_RETORNAR" or lexema == "entregue_pues":
-            return self.parse_sent_retornar()
+            nodo_sub = self.parse_sent_retornar()
         elif tipo == "IDENTIFICADOR":
-            return self.parse_asignacion_o_llamada()
+            nodo_sub = self.parse_sent_asignacion_o_llamada()
         else:
             raise ErrorSintactico(
                 f"Error Sintáctico en [Fila {getattr(self.token_actual, 'fila', '?')}]: "
                 f"Inicio de sentencia no válido con '{lexema}'"
             )
+        return {"tipo": "<sentencia>", "es_terminal": False, "hijos": [nodo_sub]}
 
     def parse_sent_declaracion(self):
-        """pille_pues <tipo_opcional> IDENTIFICADOR = <expresion>"""
-        self.match("KW_DECLARACION", "pille_pues")
-        
-        tipo_dato = None
-        if self._obtener_lexema() in ("numerito", "quebradito", "cuento", "siono"):
-            tipo_dato = self.parse_tipo()
-            
-        id_tok = self.match("IDENTIFICADOR")
-        self.match("OP_ASIGNACION", "=")
-        valor = self.parse_expresion()
+        tok_pp = self.match("KW_DECLARACION", "pille_pues")
+        nodo_to = self.parse_tipo_opcional()
+        tok_id = self.match("IDENTIFICADOR")
+        tok_eq = self.match("OP_ASIGNACION", "=")
+        nodo_expr = self.parse_expresion()
+        return {"tipo": "<sent_declaracion>", "es_terminal": False, "hijos": [tok_pp, nodo_to, tok_id, tok_eq, nodo_expr]}
 
-        return {
-            "tipo": "Declaracion",
-            "tipo_dato": tipo_dato,
-            "identificador": self._obtener_lexema(id_tok),
-            "valor": valor
-        }
+    def parse_tipo_opcional(self):
+        if self._obtener_lexema() in ("numerito", "quebradito", "cuento", "siono") or self._obtener_tipo() in ("KW_TIPO_ENTERO", "KW_TIPO_REAL", "KW_TIPO_CADENA", "KW_TIPO_BOOLEANO"):
+            nodo_t = self.parse_tipo()
+            return {"tipo": "<tipo_opcional>", "es_terminal": False, "hijos": [nodo_t]}
+        return {"tipo": "<tipo_opcional>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_sent_lectura(self):
-        """escuche_pues ( IDENTIFICADOR )"""
-        self.match("KW_LECTURA", "escuche_pues")
-        self.match("PAR_ABRE", "(")
-        id_tok = self.match("IDENTIFICADOR")
-        self.match("PAR_CIERRA", ")")
-        
-        return {
-            "tipo": "Lectura",
-            "identificador": self._obtener_lexema(id_tok)
-        }
+        tok_ep = self.match("KW_LECTURA", "escuche_pues")
+        tok_pa = self.match("PAR_ABRE", "(")
+        tok_id = self.match("IDENTIFICADOR")
+        tok_pc = self.match("PAR_CIERRA", ")")
+        return {"tipo": "<sent_lectura>", "es_terminal": False, "hijos": [tok_ep, tok_pa, tok_id, tok_pc]}
 
     def parse_sent_impresion(self):
-        """hable_pues ( <expresion> )"""
-        self.match("KW_IMPRESION", "hable_pues")
-        self.match("PAR_ABRE", "(")
-        expresion = self.parse_expresion()
-        self.match("PAR_CIERRA", ")")
-
-        return {
-            "tipo": "Impresion",
-            "expresion": expresion
-        }
+        tok_hp = self.match("KW_IMPRESION", "hable_pues")
+        tok_pa = self.match("PAR_ABRE", "(")
+        nodo_expr = self.parse_expresion()
+        tok_pc = self.match("PAR_CIERRA", ")")
+        return {"tipo": "<sent_impresion>", "es_terminal": False, "hijos": [tok_hp, tok_pa, nodo_expr, tok_pc]}
 
     def parse_sent_retornar(self):
-        """entregue_pues <expresion>"""
-        self.match("KW_RETORNAR", "entregue_pues")
-        expresion = self.parse_expresion()
+        tok_ep = self.match("KW_RETORNAR", "entregue_pues")
+        nodo_expr = self.parse_expresion()
+        return {"tipo": "<sent_retornar>", "es_terminal": False, "hijos": [tok_ep, nodo_expr]}
 
-        return {
-            "tipo": "Retorno",
-            "expresion": expresion
-        }
-
-    def parse_asignacion_o_llamada(self):
-        """IDENTIFICADOR = <expresion> | IDENTIFICADOR ( <argumentos> )"""
-        id_tok = self.match("IDENTIFICADOR")
-        
+    def parse_sent_asignacion_o_llamada(self):
+        tok_id = self.match("IDENTIFICADOR")
         if self._obtener_tipo() == "PAR_ABRE" or self._obtener_lexema() == "(":
-            # Es una llamada a función usada como sentencia
-            self.avanzar()
-            argumentos = self.parse_argumentos()
-            self.match("PAR_CIERRA", ")")
-            return {
-                "tipo": "LlamadaFuncion",
-                "identificador": self._obtener_lexema(id_tok),
-                "argumentos": argumentos
-            }
+            tok_pa = self.match("PAR_ABRE", "(")
+            nodo_args = self.parse_argumentos()
+            tok_pc = self.match("PAR_CIERRA", ")")
+            return {"tipo": "<sent_llamada>", "es_terminal": False, "hijos": [tok_id, tok_pa, nodo_args, tok_pc]}
         else:
-            # Es una reasignación (shadowing contextual)
-            self.match("OP_ASIGNACION", "=")
-            valor = self.parse_expresion()
-            return {
-                "tipo": "Asignacion",
-                "identificador": self._obtener_lexema(id_tok),
-                "valor": valor
-            }
+            tok_eq = self.match("OP_ASIGNACION", "=")
+            nodo_expr = self.parse_expresion()
+            return {"tipo": "<sent_asignacion>", "es_terminal": False, "hijos": [tok_id, tok_eq, nodo_expr]}
 
     # ==========================================
-    # 3.4 a 3.7 ESTRUCTURAS DE CONTROL
+    # 3.4 ESTRUCTURAS DE CONTROL
     # ==========================================
 
     def parse_sent_si(self):
-        """si_acaso <expresion> entonces_pues <bloque> [ sino_pues <bloque> ] asi_quedo"""
-        self.match("KW_SI", "si_acaso")
-        condicion = self.parse_expresion()
-        self.match("KW_ENTONCES", "entonces_pues")
-        
-        bloque_si = self.parse_bloque(("KW_SINO", "sino_pues", "KW_FIN_SI", "asi_quedo"))
-        bloque_sino = None
+        tok_sa = self.match("KW_SI", "si_acaso")
+        nodo_expr = self.parse_expresion()
+        tok_ep = self.match("KW_ENTONCES", "entonces_pues")
+        nodo_blq = self.parse_bloque(("sino_pues", "asi_quedo", "KW_SINO", "KW_FIN_SI"))
+        nodo_rs = self.parse_rama_sino()
+        tok_aq = self.match("KW_FIN_SI", "asi_quedo")
+        return {"tipo": "<sent_si>", "es_terminal": False, "hijos": [tok_sa, nodo_expr, tok_ep, nodo_blq, nodo_rs, tok_aq]}
 
+    def parse_rama_sino(self):
         if self._obtener_tipo() == "KW_SINO" or self._obtener_lexema() == "sino_pues":
-            self.avanzar()
-            bloque_sino = self.parse_bloque(("KW_FIN_SI", "asi_quedo"))
-
-        self.match("KW_FIN_SI", "asi_quedo")
-
-        return {
-            "tipo": "Condicional",
-            "condicion": condicion,
-            "bloque_si": bloque_si,
-            "bloque_sino": bloque_sino
-        }
+            tok_sp = self.match("KW_SINO", "sino_pues")
+            nodo_blq = self.parse_bloque(("asi_quedo", "KW_FIN_SI"))
+            return {"tipo": "<rama_sino>", "es_terminal": False, "hijos": [tok_sp, nodo_blq]}
+        return {"tipo": "<rama_sino>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_sent_mientras(self):
-        """mientras_que <expresion> dele_pues <bloque> hasta_ahi"""
-        self.match("KW_MIENTRAS", "mientras_que")
-        condicion = self.parse_expresion()
-        self.match("KW_HACER", "dele_pues")
-        
-        bloque = self.parse_bloque(("KW_FIN_MIENTRAS", "hasta_ahi"))
-        self.match("KW_FIN_MIENTRAS", "hasta_ahi")
-
-        return {
-            "tipo": "Mientras",
-            "condicion": condicion,
-            "bloque": bloque
-        }
+        tok_mq = self.match("KW_MIENTRAS", "mientras_que")
+        nodo_expr = self.parse_expresion()
+        tok_dp = self.match("KW_HACER", "dele_pues")
+        nodo_blq = self.parse_bloque(("hasta_ahi", "KW_FIN_MIENTRAS"))
+        tok_ha = self.match("KW_FIN_MIENTRAS", "hasta_ahi")
+        return {"tipo": "<sent_mientras>", "es_terminal": False, "hijos": [tok_mq, nodo_expr, tok_dp, nodo_blq, tok_ha]}
 
     def parse_sent_para(self):
-        """pa_cada IDENTIFICADOR desde <expresion> hasta <expresion> [de_a <expresion>] dele_pues <bloque> listo_pues"""
-        self.match("KW_PARA", "pa_cada")
-        id_tok = self.match("IDENTIFICADOR")
-        
-        self.match("KW_DESDE", "desde")
-        desde_expr = self.parse_expresion()
-        
-        self.match("KW_HASTA", "hasta")
-        hasta_expr = self.parse_expresion()
-        
-        paso_expr = None
+        tok_pc = self.match("KW_PARA", "pa_cada")
+        tok_id = self.match("IDENTIFICADOR")
+        tok_des = self.match("KW_DESDE", "desde")
+        nodo_expr1 = self.parse_expresion()
+        tok_has = self.match("KW_HASTA", "hasta")
+        nodo_expr2 = self.parse_expresion()
+        nodo_po = self.parse_paso_opcional()
+        tok_dp = self.match("KW_HACER", "dele_pues")
+        nodo_blq = self.parse_bloque(("listo_pues", "KW_FIN_PARA"))
+        tok_lp = self.match("KW_FIN_PARA", "listo_pues")
+        return {"tipo": "<sent_para>", "es_terminal": False, "hijos": [tok_pc, tok_id, tok_des, nodo_expr1, tok_has, nodo_expr2, nodo_po, tok_dp, nodo_blq, tok_lp]}
+
+    def parse_paso_opcional(self):
         if self._obtener_tipo() == "KW_PASO" or self._obtener_lexema() == "de_a":
-            self.avanzar()
-            paso_expr = self.parse_expresion()
-            
-        self.match("KW_HACER", "dele_pues")
-        bloque = self.parse_bloque(("KW_FIN_PARA", "listo_pues"))
-        self.match("KW_FIN_PARA", "listo_pues")
-        
-        return {
-            "tipo": "Para",
-            "identificador": self._obtener_lexema(id_tok),
-            "desde": desde_expr,
-            "hasta": hasta_expr,
-            "paso": paso_expr,
-            "bloque": bloque
-        }
+            tok_da = self.match("KW_PASO", "de_a")
+            nodo_expr = self.parse_expresion()
+            return {"tipo": "<paso_opcional>", "es_terminal": False, "hijos": [tok_da, nodo_expr]}
+        return {"tipo": "<paso_opcional>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_sent_pillemos(self):
-        """pillemos <expresion> { <lista_casos> }"""
-        self.match("KW_PILLEMOS", "pillemos")
-        expresion = self.parse_expresion()
-        self.match("LLAVE_ABRE", "{")
-        
-        casos = []
-        while self.token_actual and self._obtener_lexema() != "}":
-            casos.append(self.parse_caso())
-            
-        self.match("LLAVE_CIERRA", "}")
-        
-        return {
-            "tipo": "Pillemos",
-            "expresion": expresion,
-            "casos": casos
-        }
+        tok_p = self.match("KW_PILLEMOS", "pillemos")
+        nodo_expr = self.parse_expresion()
+        tok_la = self.match("LLAVE_ABRE", "{")
+        nodo_lc = self.parse_lista_casos()
+        tok_lc = self.match("LLAVE_CIERRA", "}")
+        return {"tipo": "<sent_pillemos>", "es_terminal": False, "hijos": [tok_p, nodo_expr, tok_la, nodo_lc, tok_lc]}
+
+    def parse_lista_casos(self):
+        nodo_c = self.parse_caso()
+        nodo_lcr = self.parse_lista_casos_resto()
+        return {"tipo": "<lista_casos>", "es_terminal": False, "hijos": [nodo_c, nodo_lcr]}
+
+    def parse_lista_casos_resto(self):
+        if self.token_actual and self._obtener_lexema() != "}":
+            nodo_c = self.parse_caso()
+            nodo_lcr = self.parse_lista_casos_resto()
+            return {"tipo": "<lista_casos_resto>", "es_terminal": False, "hijos": [nodo_c, nodo_lcr]}
+        return {"tipo": "<lista_casos_resto>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_caso(self):
-        """<patron> pa_que_lleve <cuerpo_caso>"""
-        patron = self.parse_patron()
-        self.match("KW_FLECHA", "pa_que_lleve")
-        
+        nodo_pat = self.parse_patron()
+        tok_fl = self.match("KW_FLECHA", "pa_que_lleve")
+        nodo_cc = self.parse_cuerpo_caso()
+        return {"tipo": "<caso>", "es_terminal": False, "hijos": [nodo_pat, tok_fl, nodo_cc]}
+
+    def parse_cuerpo_caso(self):
         if self._obtener_tipo() == "LLAVE_ABRE" or self._obtener_lexema() == "{":
-            self.avanzar()
-            cuerpo = self.parse_bloque(("LLAVE_CIERRA", "}"))
-            self.match("LLAVE_CIERRA", "}")
+            tok_la = self.match("LLAVE_ABRE", "{")
+            nodo_blq = self.parse_bloque(("}", "LLAVE_CIERRA"))
+            tok_lc = self.match("LLAVE_CIERRA", "}")
+            return {"tipo": "<cuerpo_caso>", "es_terminal": False, "hijos": [tok_la, nodo_blq, tok_lc]}
         else:
-            cuerpo = self.parse_sentencia()
-            
-        return {
-            "tipo": "Caso",
-            "patron": patron,
-            "cuerpo": cuerpo
-        }
+            nodo_sent = self.parse_sentencia()
+            return {"tipo": "<cuerpo_caso>", "es_terminal": False, "hijos": [nodo_sent]}
 
     def parse_patron(self):
         tipo = self._obtener_tipo()
         lexema = self._obtener_lexema()
-        
-        if tipo in ("NUM_ENTERO", "NUM_REAL", "CADENA_LITERAL"):
-            self.avanzar()
-            return {"tipo": "PatronLiteral", "valor": lexema}
-        elif tipo in ("LIT_VERDADERO", "LIT_FALSO") or lexema in ("sizas", "naranjas"):
-            self.avanzar()
-            return {"tipo": "PatronBooleano", "valor": lexema}
+        if tipo in ("NUM_ENTERO", "NUM_REAL", "CADENA_LITERAL", "LIT_VERDADERO", "LIT_FALSO") or lexema in ("sizas", "naranjas"):
+            tok = self.match(tipo, lexema)
+            return {"tipo": "<patron>", "es_terminal": False, "hijos": [tok]}
         elif tipo == "IDENTIFICADOR":
-            self.avanzar()
-            return {"tipo": "PatronIdentificador", "nombre": lexema}
+            tok = self.match("IDENTIFICADOR")
+            return {"tipo": "<patron>", "es_terminal": False, "hijos": [tok]}
         elif tipo == "COMODIN" or lexema == "_":
-            self.avanzar()
-            return {"tipo": "PatronComodin", "valor": "_"}
-            
+            tok = self.match("COMODIN", "_")
+            return {"tipo": "<patron>", "es_terminal": False, "hijos": [tok]}
         raise ErrorSintactico(f"Patrón inválido: '{lexema}'")
 
     # ==========================================
-    # 3.8 EXPRESIONES (Precedencia estricta LL1)
+    # 3.8 EXPRESIONES (Derivación completa)
     # ==========================================
 
     def parse_expresion(self):
-        return self.parse_expr_o()
+        nodo_eo = self.parse_expr_o()
+        return {"tipo": "<expresion>", "es_terminal": False, "hijos": [nodo_eo]}
 
     def parse_expr_o(self):
-        nodo_izq = self.parse_expr_y()
-        ops = ("OP_O", "o_que")
-        while self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_y()
-            }
-        return nodo_izq
+        nodo_ey = self.parse_expr_y()
+        nodo_eop = self.parse_expr_o_p()
+        return {"tipo": "<expr_o>", "es_terminal": False, "hijos": [nodo_ey, nodo_eop]}
+
+    def parse_expr_o_p(self):
+        if self._obtener_tipo() == "OP_O" or self._obtener_lexema() == "o_que":
+            tok_op = self.match("OP_O", "o_que")
+            nodo_ey = self.parse_expr_y()
+            nodo_eop = self.parse_expr_o_p()
+            return {"tipo": "<expr_o_p>", "es_terminal": False, "hijos": [tok_op, nodo_ey, nodo_eop]}
+        return {"tipo": "<expr_o_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_y(self):
-        nodo_izq = self.parse_expr_igualdad()
-        ops = ("OP_Y", "y_tambien")
-        while self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_igualdad()
-            }
-        return nodo_izq
+        nodo_ei = self.parse_expr_igualdad()
+        nodo_eyp = self.parse_expr_y_p()
+        return {"tipo": "<expr_y>", "es_terminal": False, "hijos": [nodo_ei, nodo_eyp]}
+
+    def parse_expr_y_p(self):
+        if self._obtener_tipo() == "OP_Y" or self._obtener_lexema() == "y_tambien":
+            tok_op = self.match("OP_Y", "y_tambien")
+            nodo_ei = self.parse_expr_igualdad()
+            nodo_eyp = self.parse_expr_y_p()
+            return {"tipo": "<expr_y_p>", "es_terminal": False, "hijos": [tok_op, nodo_ei, nodo_eyp]}
+        return {"tipo": "<expr_y_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_igualdad(self):
-        nodo_izq = self.parse_expr_relacional()
-        ops = ("OP_IGUAL", "OP_DISTINTO", "igualito", "distinto", "==", "!=")
-        while self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_relacional()
-            }
-        return nodo_izq
+        nodo_er = self.parse_expr_relacional()
+        nodo_eip = self.parse_expr_igualdad_p()
+        return {"tipo": "<expr_igualdad>", "es_terminal": False, "hijos": [nodo_er, nodo_eip]}
+
+    def parse_expr_igualdad_p(self):
+        if self._obtener_tipo() in ("OP_IGUAL", "OP_DISTINTO") or self._obtener_lexema() in ("igualito", "distinto", "==", "!="):
+            tok_op = self.match("OP_IGUAL", "OP_DISTINTO", "igualito", "distinto", "==", "!=")
+            nodo_er = self.parse_expr_relacional()
+            nodo_eip = self.parse_expr_igualdad_p()
+            return {"tipo": "<expr_igualdad_p>", "es_terminal": False, "hijos": [tok_op, nodo_er, nodo_eip]}
+        return {"tipo": "<expr_igualdad_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_relacional(self):
-        nodo_izq = self.parse_expr_concat()
-        ops = ("OP_MAYOR", "OP_MENOR", "OP_MAYOR_IGUAL", "OP_MENOR_IGUAL", ">", "<", ">=", "<=")
-        while self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_concat()
-            }
-        return nodo_izq
+        nodo_ec = self.parse_expr_concat()
+        nodo_erp = self.parse_expr_relacional_p()
+        return {"tipo": "<expr_relacional>", "es_terminal": False, "hijos": [nodo_ec, nodo_erp]}
+
+    def parse_expr_relacional_p(self):
+        if self._obtener_tipo() in ("OP_MAYOR", "OP_MENOR", "OP_MAYOR_IGUAL", "OP_MENOR_IGUAL") or self._obtener_lexema() in (">", "<", ">=", "<="):
+            tok_op = self.match("OP_MAYOR", "OP_MENOR", "OP_MAYOR_IGUAL", "OP_MENOR_IGUAL", ">", "<", ">=", "<=")
+            nodo_ec = self.parse_expr_concat()
+            nodo_erp = self.parse_expr_relacional_p()
+            return {"tipo": "<expr_relacional_p>", "es_terminal": False, "hijos": [tok_op, nodo_ec, nodo_erp]}
+        return {"tipo": "<expr_relacional_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_concat(self):
-        nodo_izq = self.parse_expr_aditiva()
-        ops = ("OP_CONCAT", "<>")
-        while self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_aditiva()
-            }
-        return nodo_izq
+        nodo_ea = self.parse_expr_aditiva()
+        nodo_ecp = self.parse_expr_concat_p()
+        return {"tipo": "<expr_concat>", "es_terminal": False, "hijos": [nodo_ea, nodo_ecp]}
+
+    def parse_expr_concat_p(self):
+        if self._obtener_tipo() == "OP_CONCAT" or self._obtener_lexema() == "<>":
+            tok_op = self.match("OP_CONCAT", "<>")
+            nodo_ea = self.parse_expr_aditiva()
+            nodo_ecp = self.parse_expr_concat_p()
+            return {"tipo": "<expr_concat_p>", "es_terminal": False, "hijos": [tok_op, nodo_ea, nodo_ecp]}
+        return {"tipo": "<expr_concat_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_aditiva(self):
-        nodo_izq = self.parse_expr_multiplicativa()
-        ops = ("OP_SUMA", "OP_RESTA", "+", "-")
-        while self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_multiplicativa()
-            }
-        return nodo_izq
+        nodo_em = self.parse_expr_multiplicativa()
+        nodo_eap = self.parse_expr_aditiva_p()
+        return {"tipo": "<expr_aditiva>", "es_terminal": False, "hijos": [nodo_em, nodo_eap]}
+
+    def parse_expr_aditiva_p(self):
+        if self._obtener_tipo() in ("OP_SUMA", "OP_RESTA") or self._obtener_lexema() in ("+", "-"):
+            tok_op = self.match("OP_SUMA", "OP_RESTA", "+", "-")
+            nodo_em = self.parse_expr_multiplicativa()
+            nodo_eap = self.parse_expr_aditiva_p()
+            return {"tipo": "<expr_aditiva_p>", "es_terminal": False, "hijos": [tok_op, nodo_em, nodo_eap]}
+        return {"tipo": "<expr_aditiva_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_multiplicativa(self):
-        nodo_izq = self.parse_expr_potencia()
-        ops = ("OP_MULT", "OP_DIV", "OP_MODULO", "*", "/", "%")
-        while self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_potencia()
-            }
-        return nodo_izq
+        nodo_ep = self.parse_expr_potencia()
+        nodo_emp = self.parse_expr_multiplicativa_p()
+        return {"tipo": "<expr_multiplicativa>", "es_terminal": False, "hijos": [nodo_ep, nodo_emp]}
+
+    def parse_expr_multiplicativa_p(self):
+        if self._obtener_tipo() in ("OP_MULT", "OP_DIV", "OP_MODULO") or self._obtener_lexema() in ("*", "/", "%"):
+            tok_op = self.match("OP_MULT", "OP_DIV", "OP_MODULO", "*", "/", "%")
+            nodo_ep = self.parse_expr_potencia()
+            nodo_emp = self.parse_expr_multiplicativa_p()
+            return {"tipo": "<expr_multiplicativa_p>", "es_terminal": False, "hijos": [tok_op, nodo_ep, nodo_emp]}
+        return {"tipo": "<expr_multiplicativa_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_potencia(self):
-        # La potencia asocia a la derecha
-        nodo_izq = self.parse_expr_unaria()
-        ops = ("OP_POTENCIA", "**")
-        if self.token_actual and (self._obtener_tipo() in ops or self._obtener_lexema() in ops):
-            op_tok = self.token_actual
-            self.avanzar()
-            nodo_izq = {
-                "tipo": "OperacionBinaria",
-                "operador": self._obtener_lexema(op_tok),
-                "izquierda": nodo_izq,
-                "derecha": self.parse_expr_potencia()  # Llamada recursiva para asoc. derecha
-            }
-        return nodo_izq
+        nodo_eu = self.parse_expr_unaria()
+        nodo_epp = self.parse_expr_potencia_p()
+        return {"tipo": "<expr_potencia>", "es_terminal": False, "hijos": [nodo_eu, nodo_epp]}
+
+    def parse_expr_potencia_p(self):
+        if self._obtener_tipo() == "OP_POTENCIA" or self._obtener_lexema() == "**":
+            tok_op = self.match("OP_POTENCIA", "**")
+            nodo_ep = self.parse_expr_potencia()
+            return {"tipo": "<expr_potencia_p>", "es_terminal": False, "hijos": [tok_op, nodo_ep]}
+        return {"tipo": "<expr_potencia_p>", "es_terminal": False, "hijos": [self._nodo_eps()]}
 
     def parse_expr_unaria(self):
         tipo = self._obtener_tipo()
         lexema = self._obtener_lexema()
-        
         if tipo in ("OP_NO", "OP_RESTA", "nanai", "-") or lexema in ("nanai", "-"):
-            op_tok = self.token_actual
-            self.avanzar()
-            return {
-                "tipo": "OperacionUnaria",
-                "operador": self._obtener_lexema(op_tok),
-                "expresion": self.parse_expr_unaria()
-            }
-            
-        return self.parse_expr_primaria()
+            tok_op = self.match("OP_NO", "OP_RESTA", "nanai", "-")
+            nodo_eu = self.parse_expr_unaria()
+            return {"tipo": "<expr_unaria>", "es_terminal": False, "hijos": [tok_op, nodo_eu]}
+        nodo_ep = self.parse_expr_primaria()
+        return {"tipo": "<expr_unaria>", "es_terminal": False, "hijos": [nodo_ep]}
 
     def parse_expr_primaria(self):
         if not self.token_actual:
@@ -537,51 +472,48 @@ class Parser:
         lexema = self._obtener_lexema()
 
         if tipo in ("PAR_ABRE", "(") or lexema == "(":
-            self.avanzar()
-            expresion = self.parse_expresion()
-            self.match("PAR_CIERRA", ")")
-            return expresion
+            tok_pa = self.match("PAR_ABRE", "(")
+            nodo_expr = self.parse_expresion()
+            tok_pc = self.match("PAR_CIERRA", ")")
+            return {"tipo": "<expr_primaria>", "es_terminal": False, "hijos": [tok_pa, nodo_expr, tok_pc]}
 
-        if tipo in ("NUM_ENTERO", "NUM_REAL"):
-            self.avanzar()
-            return {"tipo": "Literal", "valor_tipo": tipo.lower(), "valor": lexema}
-
-        if tipo == "CADENA_LITERAL":
-            self.avanzar()
-            return {"tipo": "Literal", "valor_tipo": "cuento", "valor": lexema}
-
-        if tipo in ("LIT_VERDADERO", "LIT_FALSO") or lexema in ("sizas", "naranjas"):
-            self.avanzar()
-            return {"tipo": "Literal", "valor_tipo": "siono", "valor": lexema}
+        if tipo in ("NUM_ENTERO", "NUM_REAL", "CADENA_LITERAL", "LIT_VERDADERO", "LIT_FALSO") or lexema in ("sizas", "naranjas"):
+            tok = self.match(tipo, lexema)
+            return {"tipo": "<expr_primaria>", "es_terminal": False, "hijos": [tok]}
 
         if tipo == "IDENTIFICADOR":
-            id_tok = self.token_actual
-            self.avanzar()
-            # Validar Sufijo (Llamada a función)
-            if self._obtener_tipo() == "PAR_ABRE" or self._obtener_lexema() == "(":
-                self.avanzar()
-                argumentos = self.parse_argumentos()
-                self.match("PAR_CIERRA", ")")
-                return {
-                    "tipo": "LlamadaFuncion",
-                    "identificador": self._obtener_lexema(id_tok),
-                    "argumentos": argumentos
-                }
-            return {"tipo": "Identificador", "nombre": self._obtener_lexema(id_tok)}
+            tok_id = self.match("IDENTIFICADOR")
+            nodo_suf = self.parse_sufijo_id()
+            return {"tipo": "<expr_primaria>", "es_terminal": False, "hijos": [tok_id, nodo_suf]}
 
         raise ErrorSintactico(
             f"Error Sintáctico en [Fila {getattr(self.token_actual, 'fila', '?')}]: "
             f"Expresión no válida iniciando con '{lexema}'"
         )
 
+    def parse_sufijo_id(self):
+        if self._obtener_tipo() == "PAR_ABRE" or self._obtener_lexema() == "(":
+            tok_pa = self.match("PAR_ABRE", "(")
+            nodo_args = self.parse_argumentos()
+            tok_pc = self.match("PAR_CIERRA", ")")
+            return {"tipo": "<sufijo_id>", "es_terminal": False, "hijos": [tok_pa, nodo_args, tok_pc]}
+        return {"tipo": "<sufijo_id>", "es_terminal": False, "hijos": [self._nodo_eps()]}
+
     def parse_argumentos(self):
-        """<arg_lista> | e"""
-        args = []
         if self._obtener_tipo() != "PAR_CIERRA" and self._obtener_lexema() != ")":
-            while True:
-                args.append(self.parse_expresion())
-                if self._obtener_tipo() == "COMA" or self._obtener_lexema() == ",":
-                    self.avanzar()
-                else:
-                    break
-        return args
+            nodo_al = self.parse_arg_lista()
+            return {"tipo": "<argumentos>", "es_terminal": False, "hijos": [nodo_al]}
+        return {"tipo": "<argumentos>", "es_terminal": False, "hijos": [self._nodo_eps()]}
+
+    def parse_arg_lista(self):
+        nodo_expr = self.parse_expresion()
+        nodo_ar = self.parse_arg_resto()
+        return {"tipo": "<arg_lista>", "es_terminal": False, "hijos": [nodo_expr, nodo_ar]}
+
+    def parse_arg_resto(self):
+        if self._obtener_tipo() == "COMA" or self._obtener_lexema() == ",":
+            tok_coma = self.match("COMA", ",")
+            nodo_expr = self.parse_expresion()
+            nodo_ar = self.parse_arg_resto()
+            return {"tipo": "<arg_resto>", "es_terminal": False, "hijos": [tok_coma, nodo_expr, nodo_ar]}
+        return {"tipo": "<arg_resto>", "es_terminal": False, "hijos": [self._nodo_eps()]}
