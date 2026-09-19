@@ -9,12 +9,22 @@ def capturar_arbol_ascii(nodo, prefijo="", es_ultimo=True) -> str:
         return ""
 
     lineas = []
-    tipo = nodo.get("tipo", "Nodo")
+    
+    # Busca 'name' (Predictivo) o 'tipo' (Recursivo)
+    nombre = nodo.get("name", nodo.get("tipo", "Nodo"))
+    
+    # Si el nodo recursivo trae el lexema por separado en 'valor', se lo concatenamos
+    valor = nodo.get("valor")
+    if valor:
+        nombre = f"{nombre} ({valor})"
+
     conector = "└── " if es_ultimo else "├── "
-    lineas.append(prefijo + conector + tipo)
+    lineas.append(prefijo + conector + str(nombre))
 
     nuevo_prefijo = prefijo + ("    " if es_ultimo else "│   ")
-    hijos = nodo.get("hijos", [])
+    
+    # Busca 'children' (Predictivo) o 'hijos' (Recursivo)
+    hijos = nodo.get("children", nodo.get("hijos", []))
 
     for i, hijo in enumerate(hijos):
         res = capturar_arbol_ascii(hijo, nuevo_prefijo, i == len(hijos) - 1)
@@ -48,24 +58,35 @@ def exportar_dot(ast, ruta_archivo="arbol_sintactico.dot") -> str:
             
         contador[0] += 1
         id_actual = f"node{contador[0]}"
-        tipo = nodo.get("tipo", "Nodo")
-        es_terminal = nodo.get("es_terminal", False)
         
-        lbl = _limpiar(tipo)
+        # Extracción compatible con ambos analizadores
+        nombre = str(nodo.get("name", nodo.get("tipo", "Nodo")))
+        valor = nodo.get("valor")
+        if valor:
+            nombre = f"{nombre} ({valor})"
+            
+        hijos = nodo.get("children", nodo.get("hijos", []))
         
-        # Estilos diferenciados según el tipo de nodo en la derivación
-        if es_terminal:
-            if tipo == "ε":
-                lineas.append(f'    {id_actual} [label="{lbl}", shape=ellipse, style="filled", color="#64748B", fontname="Courier", fontcolor="#94A3B8", fillcolor="#1E293B"];')
-            else:
-                lineas.append(f'    {id_actual} [label="{lbl}", shape=box, style="filled,rounded", color="#10B981", fontname="Courier", fontcolor="#F8FAFC", fillcolor="#065F46"];')
+        # Variables de estilo para Predictivo ("type") y Recursivo ("es_terminal")
+        tipo_json = nodo.get("type")
+        es_term_recursivo = nodo.get("es_terminal", False)
+        
+        lbl = _limpiar(nombre)
+        
+        # Color Gris para Épsilon
+        if tipo_json == "epsilon" or nombre == "ε":
+            lineas.append(f'    {id_actual} [label="{lbl}", shape=ellipse, style="filled", color="#64748B", fontname="Courier", fontcolor="#94A3B8", fillcolor="#1E293B"];')
+        # Color Verde para Terminales (Hoja sin hijos o detectado como terminal)
+        elif tipo_json == "terminal" or es_term_recursivo:
+            lineas.append(f'    {id_actual} [label="{lbl}", shape=box, style="filled,rounded", color="#10B981", fontname="Courier", fontcolor="#F8FAFC", fillcolor="#065F46"];')
+        # Color Azul para No-Terminales (Nodos intermedios)
         else:
             lineas.append(f'    {id_actual} [label="{lbl}", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];')
         
         if id_padre:
             lineas.append(f"    {id_padre} -> {id_actual};")
 
-        for hijo in nodo.get("hijos", []):
+        for hijo in hijos:
             recorrer(hijo, id_padre=id_actual)
 
     recorrer(ast)

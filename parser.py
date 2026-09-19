@@ -50,7 +50,7 @@ class Parser:
 
             if tipo in esperados or lexema in esperados:
                 self.avanzar()
-                return {"tipo": f"'{lexema}'", "es_terminal": True, "hijos": []}
+                return {"tipo": f"{tipo} ({lexema})", "es_terminal": True, "hijos": []}
 
         fila = getattr(self.token_actual, 'fila', getattr(self.token_actual, 'linea', '?'))
         col = getattr(self.token_actual, 'columna', '?')

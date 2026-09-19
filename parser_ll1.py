@@ -22,11 +22,23 @@ class ErrorSintacticoLL1(Exception):
 
 def obtener_simbolo_token(token):
     """Mapea el objeto token del lexer al símbolo terminal de la gramática."""
-    if token.tipo == "EOF":
+    
+    # 1. Manejo del token EOF simulado interno de parser_ll1
+    if getattr(token, "tipo", None) == "EOF":
         return "$"
-    # Si el tipo del token coincide exactamente con los definidos en la gramática 
-    # (ej. KW_SI, IDENTIFICADOR, NUM_ENTERO, OP_SUMA)
-    return token.tipo
+        
+    # 2. Manejo de los tokens reales del lexer (Enums)
+    if hasattr(token.tipo, "name"):
+        nombre_token = token.tipo.name
+        
+        # Traducir el fin de archivo nativo del lexer al símbolo de la gramática
+        if nombre_token == "FIN_ARCHIVO":
+            return "$"
+            
+        return nombre_token
+        
+    # 3. Respaldo
+    return str(token.tipo)
 
 def analisis_predictivo(tokens):
     """

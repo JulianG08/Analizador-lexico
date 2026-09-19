@@ -21,6 +21,9 @@ from parser import Parser, ErrorSintactico
 from tabla_ll1 import obtener_dataframe_tabla, obtener_dataframes_conjuntos
 from parser_ll1 import analisis_predictivo, NodoArbol
 
+# --- IMPORTACIÓN DEL ASISTENTE DE IA ---
+from ai_assistant import analizar_error_con_ia
+
 RAIZ = Path(__file__).parent
 
 # Soporte para entrada en vivo
@@ -101,7 +104,6 @@ st.markdown(f"""
 def nodo_a_dict(nodo: NodoArbol) -> dict:
     """Convierte los objetos NodoArbol del LL1 al formato dict/JSON para el gráfico."""
     if not nodo: return {}
-    # Adapta la clave 'type'/'name' según lo que requiera arbol_grafico.py
     d = {"name": nodo.valor, "type": nodo.tipo}
     if nodo.hijos:
         d["children"] = [nodo_a_dict(h) for h in nodo.hijos]
@@ -147,7 +149,6 @@ def analizar(codigo: str, metodo: str):
     error_sintactico = None
     traza_ll1 = []
 
-    # Si hay errores léxicos graves, podríamos abortar, pero intentaremos seguir
     if "Recursivo" in metodo:
         try:
             parser = Parser(tokens)
@@ -171,7 +172,7 @@ def analizar(codigo: str, metodo: str):
 
 
 # =============================================================================
-#  VISTAS HTML (Sin Cambios)
+#  VISTAS HTML
 # =============================================================================
 
 def html_codigo(codigo: str, tokens, errores) -> str:
@@ -226,12 +227,6 @@ def html_fichas(tokens) -> str:
     return f'<div class="lienzo" style="line-height:2.2">{"".join(fichas)}</div>'
 
 
-def extraer_fragmento(fuente: str, inicio: str, fin: str) -> str:
-    i = fuente.index(inicio)
-    j = fuente.index(fin, i) + len(fin)
-    return fuente[i:j]
-
-
 def html_error(codigo: str, e) -> str:
     lineas = codigo.split("\n")
     texto = lineas[e.fila - 1] if 1 <= e.fila <= len(lineas) else ""
@@ -246,13 +241,13 @@ def html_error(codigo: str, e) -> str:
 
 
 # =============================================================================
-#  BARRA LATERAL — ENTRADA
+#  BARRA LATERAL — ENTRADA Y CONFIGURACIÓN DE IA
 # =============================================================================
 
 st.sidebar.title("🪕 Paisascript")
 st.sidebar.caption("Frontend: Análisis Léxico y Sintáctico")
 
-# --- SELECCION DE METODO (Requisito 11) ---
+# --- SELECCION DE METODO ---
 metodo_analisis = st.sidebar.radio(
     "1. Método de Análisis Sintáctico",
     ["1. Descendente Recursivo", "2. Predictivo LL(1) (Pila)"]
@@ -298,7 +293,7 @@ elif modo == "Cadena libre":
             height=260,
             key="area_clasica",
         )
-        st.sidebar.button("🔎 Analizar ahora", width="stretch")
+        st.sidebar.button("🔎 Analizar ahora", use_container_width=True)
 
     codigo = st.session_state.codigo_libre
     titulo_fuente = "cadena digitada"
@@ -312,6 +307,34 @@ else:
         st.sidebar.warning("Suba un archivo para analizar.")
 
 st.sidebar.divider()
+
+# --- CONFIGURACIÓN DE LA API KEY DE IA (Con soporte para clave temporal) ---
+st.sidebar.subheader("🤖 Configuración Asistente IA")
+usar_key_personalizada = st.sidebar.checkbox("Usar API Key personalizada", value=True)
+
+API_KEY_PRINCIPAL = ""
+
+if usar_key_personalizada:
+    api_key_base = st.sidebar.text_input(
+        "OpenAI API Key (Principal)",
+        value=API_KEY_PRINCIPAL,
+        type="password"
+    )
+    
+    api_key_temporal = st.sidebar.text_input(
+        "⚡ API Key Temporal (Opcional)",
+        value="",
+        type="password",
+        help="Si escribes una clave aquí, se usará temporalmente para la prueba sin alterar tu clave principal de arriba."
+    )
+    
+    api_key_activa = api_key_temporal.strip() if api_key_temporal.strip() else api_key_base
+    
+    if api_key_temporal.strip():
+        st.sidebar.warning("⚠️ Usando API Key temporal para esta prueba.")
+else:
+    api_key_activa = None
+    st.sidebar.caption("Usando variable de entorno `OPENAI_API_KEY` del sistema.")
 
 
 # =============================================================================
@@ -337,11 +360,11 @@ c4.metric("Parser", estado_parser, delta=None if not error_sintactico else "1 er
 with st.expander("Ver / editar el código fuente", expanded=False):
     st.code(codigo, language=None)
 
-# Añadimos las pestañas nuevas del LL(1) a la vista
+# Pestañas de la aplicación
 pestañas = st.tabs([
     "Árbol Sintáctico (AST)", 
-    "Traza de Pila LL(1)",        # NUEVA
-    "Tablas LL(1) / Conjuntos",   # NUEVA
+    "Traza de Pila LL(1)",        
+    "Tablas LL(1) / Conjuntos",   
     "Código segmentado",
     "Flujo de tokens",
     "Tabla de símbolos",
@@ -358,6 +381,16 @@ with pestañas[0]:
     
     if error_sintactico:
         st.error(f"No se pudo completar el AST debido a un error de sintaxis: {error_sintactico}")
+        
+        # Botón integrado de IA en caso de error sintáctico
+        st.divider()
+        st.markdown("### ✨ Asistente de IA para Corrección")
+        if st.button("🤖 Analizar error sintáctico con Inteligencia Artificial", key="btn_ia_ast"):
+            with st.spinner("El asistente de IA está analizando tu código y el fallo..."):
+                detalle_fallo = f"Error Sintáctico en el Parser: {error_sintactico}"
+                sugerencia = analizar_error_con_ia(codigo, detalle_fallo, api_key=api_key_activa)
+                st.markdown(sugerencia)
+                
     elif ast:
         st.success("Análisis sintáctico completado con éxito.")
         
@@ -379,12 +412,11 @@ with pestañas[0]:
             else:
                 st.info("Módulo gráfico no disponible.")
 
-            # Respaldo ASCII desplegable siempre disponible
             if _ARBOL_GRAFICO_DISPONIBLE:
                 with st.expander("Ver árbol sintáctico en formato texto ASCII"):
                     st.code(capturar_arbol_ascii(ast), language=None)
 
-# --- NUEVA PESTAÑA: Traza de Pila LL(1) ---
+# --- PESTAÑA: Traza de Pila LL(1) ---
 with pestañas[1]:
     st.subheader("Algoritmo de Pila Predictivo")
     if "Predictivo" not in metodo_analisis:
@@ -398,11 +430,10 @@ with pestañas[1]:
         else:
             st.warning("No se generó traza de pila.")
 
-# --- NUEVA PESTAÑA: Tablas LL(1) y Conjuntos ---
+# --- PESTAÑA: Tablas LL(1) y Conjuntos ---
 with pestañas[2]:
     st.subheader("Motor Predictivo: Conjuntos y Matriz M[A,a]")
     
-    # Esta tabla es estática a la gramática, no depende de la cadena de entrada
     df_conjuntos = obtener_dataframes_conjuntos()
     df_tabla_M = obtener_dataframe_tabla()
 
@@ -437,17 +468,36 @@ with pestañas[5]:
         use_container_width=True, hide_index=True, height=460,
     )
 
-# --- 4. Errores -------------------------------------------------------------
+# --- 4. Errores y Asistente IA ----------------------------------------------
 with pestañas[6]:
-    st.subheader("Reporte de errores léxicos")
-    if not errores:
-        st.success("No se encontró ningún error léxico en esta entrada.")
+    st.subheader("Reporte de errores léxicos y sintácticos")
+    
+    tiene_problemas = bool(errores) or bool(error_sintactico)
+    
+    if not tiene_problemas:
+        st.success("¡Todo melo! No se encontró ningún error léxico ni sintáctico en esta entrada.")
     else:
-        st.dataframe(tabla_err, use_container_width=True, hide_index=True)
+        if errores:
+            st.markdown("#### ❌ Errores Léxicos")
+            st.dataframe(tabla_err, use_container_width=True, hide_index=True)
+            st.divider()
+            for e in errores:
+                st.markdown(f"**Error en fila {e.fila}, columna {e.columna}** — {e.mensaje}")
+                st.markdown(html_error(codigo, e), unsafe_allow_html=True)
+                
+        if error_sintactico:
+            st.markdown("#### ❌ Error Sintáctico")
+            st.error(error_sintactico)
+
         st.divider()
-        for e in errores:
-            st.markdown(f"**Error en fila {e.fila}, columna {e.columna}** — {e.mensaje}")
-            st.markdown(html_error(codigo, e), unsafe_allow_html=True)
+        st.markdown("### 🤖 Diagnóstico y Sugerencia con Inteligencia Artificial")
+        st.markdown("Deja que la IA examine el código fuente completo y los errores detectados para darte una solución guiada:")
+        
+        if st.button("✨ Consultar sugerencias de IA para estos errores", key="btn_ia_errores"):
+            with st.spinner("Analizando con el modelo de lenguaje..."):
+                resumen_fallos = f"Errores léxicos: {len(errores)}. Error sintáctico: {error_sintactico}"
+                sugerencia_ia = analizar_error_con_ia(codigo, resumen_fallos, api_key=api_key_activa)
+                st.markdown(sugerencia_ia)
 
 # --- 5. Resumen -------------------------------------------------------------
 with pestañas[7]:
