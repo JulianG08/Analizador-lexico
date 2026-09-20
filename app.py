@@ -308,33 +308,24 @@ else:
 
 st.sidebar.divider()
 
-# --- CONFIGURACIÓN DE LA API KEY DE IA (Con soporte para clave temporal) ---
-st.sidebar.subheader("🤖 Configuración Asistente IA")
-usar_key_personalizada = st.sidebar.checkbox("Usar API Key personalizada", value=True)
+# --- CONFIGURACIÓN DEL ASISTENTE DE IA ---
+st.sidebar.subheader("🤖 Asistente de IA")
 
-API_KEY_PRINCIPAL = ""
+with st.sidebar.expander("⚙️ Configuración de API (Opcional)"):
+    st.caption("Por defecto se usa la clave segura del archivo `.env`.")
+    api_key_manual = st.text_input(
+        "Clave temporal (OpenAI)", 
+        type="password", 
+        help="Déjalo en blanco para usar la clave de tu entorno."
+    )
 
-if usar_key_personalizada:
-    api_key_base = st.sidebar.text_input(
-        "OpenAI API Key (Principal)",
-        value=API_KEY_PRINCIPAL,
-        type="password"
-    )
-    
-    api_key_temporal = st.sidebar.text_input(
-        "⚡ API Key Temporal (Opcional)",
-        value="",
-        type="password",
-        help="Si escribes una clave aquí, se usará temporalmente para la prueba sin alterar tu clave principal de arriba."
-    )
-    
-    api_key_activa = api_key_temporal.strip() if api_key_temporal.strip() else api_key_base
-    
-    if api_key_temporal.strip():
-        st.sidebar.warning("⚠️ Usando API Key temporal para esta prueba.")
+# Si el usuario escribe algo, se usa; si no, se envía None y el backend lee el .env
+api_key_activa = api_key_manual.strip() if api_key_manual else None
+
+if not api_key_activa:
+    st.sidebar.success("✅ Conectado mediante `.env`")
 else:
-    api_key_activa = None
-    st.sidebar.caption("Usando variable de entorno `OPENAI_API_KEY` del sistema.")
+    st.sidebar.warning("⚠️ Usando clave temporal manual")
 
 
 # =============================================================================
