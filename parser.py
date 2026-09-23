@@ -2,20 +2,72 @@
 Módulo: parser.py
 Descripción: Analizador Sintáctico Descendente Recursivo LL(1) para Paisascript.
 Genera el Árbol de Derivación Sintáctica Completo (CST) según la gramática BNF.
+
+Recuperación de errores (modo pánico):
+    El parser NO se detiene en el primer error. Cada error se registra en
+    `self.errores`, se sincroniza con un token "seguro" y el análisis continúa.
+    Al terminar `parse()`, si hubo errores, lanza `ErroresSintacticos` con la
+    lista completa (`e.errores`) y el árbol parcial (`e.cst`).
 """
+
 
 class ErrorSintactico(Exception):
     """Excepción personalizada para errores de análisis sintáctico."""
     pass
 
+
+class ErroresSintacticos(ErrorSintactico):
+    """
+    Agrupa todos los errores sintácticos encontrados en una sola pasada.
+    Hereda de ErrorSintactico, así que un `except ErrorSintactico` existente
+    sigue funcionando y str(e) muestra todos los errores.
+    """
+    def __init__(self, errores, cst=None):
+        self.errores = list(errores)
+        self.cst = cst
+        cabecera = f"Se encontraron {len(self.errores)} error(es) sintáctico(s):"
+        detalle = "\n".join(f"  {i}. {e}" for i, e in enumerate(self.errores, 1))
+        super().__init__(f"{cabecera}\n{detalle}")
+
+
+# ==========================================
+# CONJUNTOS DE SINCRONIZACIÓN
+# ==========================================
+
+# Tokens que pueden iniciar una sentencia
+INICIO_SENT_LEX = {
+    "pille_pues", "escuche_pues", "hable_pues", "si_acaso",
+    "mientras_que", "pa_cada", "pillemos", "entregue_pues",
+}
+INICIO_SENT_TIPO = {
+    "KW_DECLARACION", "KW_LECTURA", "KW_IMPRESION", "KW_SI",
+    "KW_MIENTRAS", "KW_PARA", "KW_PILLEMOS", "KW_RETORNAR",
+    "IDENTIFICADOR",
+}
+
+# Tokens que "cortan" un bloque: cierres de cualquier construcción y el inicio
+# de una función (las funciones solo existen a nivel global, así que si aparece
+# una dentro de un bloque es porque faltó cerrar algo).
+FRONTERA_LEX = {
+    "ya_quedo", "asi_quedo", "hasta_ahi", "listo_pues", "sino_pues", "}",
+    "hagale_pues",
+}
+FRONTERA_TIPO = {
+    "KW_FIN_FUNCION", "KW_FIN_SI", "KW_SINO", "KW_FIN_MIENTRAS",
+    "KW_FIN_PARA", "LLAVE_CIERRA", "KW_FUNCION",
+}
+
+
 class Parser:
     def __init__(self, tokens):
         self.tokens = [
-            t for t in tokens 
+            t for t in tokens
             if self._obtener_tipo(t) not in ("ESPACIO", "COMENTARIO", "FIN_ARCHIVO", "FIN")
         ]
         self.pos = 0
         self.token_actual = self.tokens[0] if self.tokens else None
+        self.errores = []
+        self._pos_ultimo_error = -1
 
     # ==========================================
     # HELPER MAPPING
@@ -65,8 +117,128 @@ class Parser:
     def _nodo_eps(self):
         return {"tipo": "ε", "es_terminal": True, "hijos": []}
 
+    def _nodo_error(self):
+        return {"tipo": "<error>", "es_terminal": True, "hijos": []}
+
+    # ==========================================
+    # RECUPERACIÓN DE ERRORES (MODO PÁNICO)
+    # ==========================================
+
+    def _coincide(self, lexemas=(), tipos=()):
+        """True si el token actual tiene alguno de los lexemas o tipos dados."""
+        if not self.token_actual:
+            return False
+        return self._obtener_lexema() in lexemas or self._obtener_tipo() in tipos
+
+    def _es_cierre(self, tokens_cierre):
+        # tokens_cierre mezcla lexemas y tipos, igual que en el resto del parser
+        return self._coincide(tokens_cierre, tokens_cierre)
+
+    def _es_frontera(self):
+        return self._coincide(FRONTERA_LEX, FRONTERA_TIPO)
+
+    def _es_inicio_sentencia(self):
+        return self._coincide(INICIO_SENT_LEX, INICIO_SENT_TIPO)
+
+    def _es_inicio_funcion(self):
+        return self._coincide(("hagale_pues",), ("KW_FUNCION",))
+
+    def _registrar_error(self, error):
+        """
+        Guarda el error. Si ya se reportó un error en este mismo token, se
+        descarta (suele ser un error en cascada). El fin de archivo se exceptúa
+        para poder reportar cada construcción que quedó sin cerrar.
+        """
+        if self.token_actual is None or self.pos != self._pos_ultimo_error:
+            self.errores.append(str(error))
+        self._pos_ultimo_error = self.pos
+
+    def _sincronizar_declaracion(self, pos_inicio):
+        """Nivel global: salta hasta el inicio de la siguiente declaración."""
+        if self.pos == pos_inicio and self.token_actual:
+            self.avanzar()  # garantiza progreso, evita bucle infinito
+        while self.token_actual and not (self._es_inicio_funcion() or self._es_inicio_sentencia()):
+            self.avanzar()
+
+    def _sincronizar_funcion(self):
+        """Error en una función: salta hasta después de su 'ya_quedo' (o al
+        inicio de la siguiente función / fin de archivo)."""
+        while self.token_actual:
+            if self._es_inicio_funcion():
+                return
+            if self._coincide(("ya_quedo",), ("KW_FIN_FUNCION",)):
+                self.avanzar()
+                return
+            self.avanzar()
+
+    def _sincronizar_bloque(self, pos_inicio, tokens_cierre):
+        """Dentro de un bloque: salta hasta la siguiente sentencia o un cierre."""
+        if (self.pos == pos_inicio and self.token_actual
+                and not self._es_cierre(tokens_cierre) and not self._es_frontera()):
+            self.avanzar()  # garantiza progreso
+        while (self.token_actual
+               and not self._es_cierre(tokens_cierre)
+               and not self._es_frontera()
+               and not self._es_inicio_sentencia()):
+            self.avanzar()
+
+    def _sincronizar_caso(self):
+        """Dentro de 'pillemos': salta hasta la '}' que lo cierra (sin consumirla)."""
+        profundidad = 0
+        while self.token_actual:
+            if self._coincide(("{",), ("LLAVE_ABRE",)):
+                profundidad += 1
+            elif self._coincide(("}",), ("LLAVE_CIERRA",)):
+                if profundidad == 0:
+                    return
+                profundidad -= 1
+            self.avanzar()
+
+    def _declaracion_segura(self):
+        pos_inicio = self.pos
+        era_funcion = self._es_inicio_funcion()
+        try:
+            return self.parse_declaracion()
+        except ErrorSintactico as e:
+            self._registrar_error(e)
+            if era_funcion:
+                self._sincronizar_funcion()
+            else:
+                self._sincronizar_declaracion(pos_inicio)
+            return self._nodo_error()
+
+    def _sentencia_segura(self, tokens_cierre):
+        pos_inicio = self.pos
+        try:
+            return self.parse_sentencia()
+        except ErrorSintactico as e:
+            self._registrar_error(e)
+            self._sincronizar_bloque(pos_inicio, tokens_cierre)
+            return self._nodo_error()
+
+    def _caso_seguro(self):
+        try:
+            return self.parse_caso()
+        except ErrorSintactico as e:
+            self._registrar_error(e)
+            self._sincronizar_caso()
+            return self._nodo_error()
+
+    # ==========================================
+    # PUNTO DE ENTRADA
+    # ==========================================
+
     def parse(self):
-        return self.parse_programa()
+        """
+        Analiza todo el programa. Si hay errores sintácticos, lanza
+        ErroresSintacticos con TODOS los errores encontrados.
+        """
+        self.errores = []
+        self._pos_ultimo_error = -1
+        cst = self.parse_programa()
+        if self.errores:
+            raise ErroresSintacticos(self.errores, cst)
+        return cst
 
     # ==========================================
     # 3.1 PROGRAMA Y DECLARACIONES
@@ -78,7 +250,7 @@ class Parser:
 
     def parse_lista_declaraciones(self):
         if self.token_actual is not None:
-            nodo_dec = self.parse_declaracion()
+            nodo_dec = self._declaracion_segura()
             nodo_ld = self.parse_lista_declaraciones()
             return {"tipo": "<lista_declaraciones>", "es_terminal": False, "hijos": [nodo_dec, nodo_ld]}
         return {"tipo": "<lista_declaraciones>", "es_terminal": False, "hijos": [self._nodo_eps()]}
@@ -153,17 +325,17 @@ class Parser:
     # ==========================================
 
     def parse_bloque(self, tokens_cierre=("ya_quedo", "asi_quedo", "hasta_ahi", "listo_pues", "}")):
-        nodo_sent = self.parse_sentencia()
+        nodo_sent = self._sentencia_segura(tokens_cierre)
         nodo_ls = self.parse_lista_sentencias(tokens_cierre)
         return {"tipo": "<bloque>", "es_terminal": False, "hijos": [nodo_sent, nodo_ls]}
 
     def parse_lista_sentencias(self, tokens_cierre):
         if self.token_actual:
-            tipo_act = self._obtener_tipo()
-            lex_act = self._obtener_lexema()
-            if tipo_act in tokens_cierre or lex_act in tokens_cierre:
+            # Cierre propio del bloque, o cierre ajeno / inicio de función
+            # (el bloque termina y el constructor que lo contiene reporta el error).
+            if self._es_cierre(tokens_cierre) or self._es_frontera():
                 return {"tipo": "<lista_sentencias>", "es_terminal": False, "hijos": [self._nodo_eps()]}
-            nodo_s = self.parse_sentencia()
+            nodo_s = self._sentencia_segura(tokens_cierre)
             nodo_ls = self.parse_lista_sentencias(tokens_cierre)
             return {"tipo": "<lista_sentencias>", "es_terminal": False, "hijos": [nodo_s, nodo_ls]}
         return {"tipo": "<lista_sentencias>", "es_terminal": False, "hijos": [self._nodo_eps()]}
@@ -302,13 +474,13 @@ class Parser:
         return {"tipo": "<sent_pillemos>", "es_terminal": False, "hijos": [tok_p, nodo_expr, tok_la, nodo_lc, tok_lc]}
 
     def parse_lista_casos(self):
-        nodo_c = self.parse_caso()
+        nodo_c = self._caso_seguro()
         nodo_lcr = self.parse_lista_casos_resto()
         return {"tipo": "<lista_casos>", "es_terminal": False, "hijos": [nodo_c, nodo_lcr]}
 
     def parse_lista_casos_resto(self):
         if self.token_actual and self._obtener_lexema() != "}":
-            nodo_c = self.parse_caso()
+            nodo_c = self._caso_seguro()
             nodo_lcr = self.parse_lista_casos_resto()
             return {"tipo": "<lista_casos_resto>", "es_terminal": False, "hijos": [nodo_c, nodo_lcr]}
         return {"tipo": "<lista_casos_resto>", "es_terminal": False, "hijos": [self._nodo_eps()]}

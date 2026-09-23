@@ -15,11 +15,11 @@ from chequeo_estructural import verificar_balance
 from ejemplos import EJEMPLOS
 from lexer import Lexer, TipoToken
 from mapeo_gleam import equivalente, es_directo
-from parser import Parser, ErrorSintactico
+from parser import Parser, ErrorSintactico, ErroresSintacticos
 
 # --- IMPORTACIONES NUEVAS PARA ENTREGA 2 (LL1) ---
 from tabla_ll1 import obtener_dataframe_tabla, obtener_dataframes_conjuntos
-from parser_ll1 import analisis_predictivo, NodoArbol
+from parser_ll1 import analisis_predictivo_multi, NodoArbol
 
 # --- IMPORTACIÓN DEL ASISTENTE DE IA ---
 from ai_assistant import analizar_error_con_ia
@@ -29,6 +29,7 @@ RAIZ = Path(__file__).parent
 # Soporte para entrada en vivo
 try:
     from componente_entrada_viva import area_texto_viva
+
     _ENTRADA_VIVA_DISPONIBLE = True
 except Exception:
     _ENTRADA_VIVA_DISPONIBLE = False
@@ -36,10 +37,10 @@ except Exception:
 # Soporte condicional para Árbol Gráfico (Graphviz)
 try:
     from arbol_grafico import generar_grafo_ast, capturar_arbol_ascii
+
     _ARBOL_GRAFICO_DISPONIBLE = True
 except ImportError:
     _ARBOL_GRAFICO_DISPONIBLE = False
-
 
 # =============================================================================
 #  CONFIGURACION Y ESTILOS
@@ -52,13 +53,13 @@ st.set_page_config(
 )
 
 COLORES = {
-    "RESERVADA":     "#c678dd",
-    "TIPO":          "#56b6c2",
-    "OPERADOR":      "#e5c07b",
-    "LITERAL":       "#98c379",
+    "RESERVADA": "#c678dd",
+    "TIPO": "#56b6c2",
+    "OPERADOR": "#e5c07b",
+    "LITERAL": "#98c379",
     "IDENTIFICADOR": "#61afef",
-    "PUNTUACION":    "#8b93a1",
-    "FIN":           "#5c6370",
+    "PUNTUACION": "#8b93a1",
+    "FIN": "#5c6370",
 }
 FONDO = "#282c34"
 TENUE = "#5c6370"
@@ -111,6 +112,44 @@ def nodo_a_dict(nodo: NodoArbol) -> dict:
 
 
 # =============================================================================
+#  ERRORES SINTÁCTICOS (uno o varios)
+# =============================================================================
+
+def texto_errores(lista: list[str]) -> str:
+    """Une los errores sintácticos en un solo texto (numerado si hay varios)."""
+    if len(lista) <= 1:
+        return lista[0] if lista else ""
+    return "\n".join(f"{i}. {m}" for i, m in enumerate(lista, start=1))
+
+
+def _md(texto: str) -> str:
+    """Escapa caracteres que Streamlit interpretaría como Markdown/LaTeX ($, *, _...)."""
+    for ch in ("\\", "*", "_", "`", "$"):
+        texto = texto.replace(ch, "\\" + ch)
+    return texto
+
+
+def mostrar_lista_errores(lista: list[str]) -> None:
+    """Un recuadro por error (numerados cuando hay más de uno)."""
+    if len(lista) == 1:
+        st.error(_md(lista[0]))
+    else:
+        for i, msg in enumerate(lista, start=1):
+            st.error(f"**{i}.** {_md(msg)}")
+
+
+def mostrar_errores_sintacticos(lista: list[str], titulo_uno: str, titulo_varios: str) -> None:
+    """Muestra un título y luego todos los errores sintácticos encontrados."""
+    if not lista:
+        return
+    if len(lista) == 1:
+        st.error(f"{titulo_uno}: {_md(lista[0])}")
+    else:
+        st.error(f"{titulo_varios} ({len(lista)}):")
+        mostrar_lista_errores(lista)
+
+
+# =============================================================================
 #  ANALISIS  (cacheado: reanaliza cuando cambia el texto o el método)
 # =============================================================================
 
@@ -120,7 +159,7 @@ def analizar(codigo: str, metodo: str):
     lexer = Lexer(codigo)
     tokens = lexer.tokenizar()
     utiles = [t for t in tokens if t.tipo is not TipoToken.FIN_ARCHIVO]
-    
+
     filas = [
         {
             "#": i,
@@ -135,40 +174,46 @@ def analizar(codigo: str, metodo: str):
         }
         for i, t in enumerate(utiles, start=1)
     ]
-    
+
     errores = [
         {"#": i, "Fila": e.fila, "Columna": e.columna,
          "Lexema": e.lexema, "Causa": e.mensaje}
         for i, e in enumerate(lexer.errores, start=1)
     ]
-    
+
     chequeo = verificar_balance(utiles)
 
     # FASE 2: Análisis Sintáctico (Según método seleccionado)
     ast = None
-    error_sintactico = None
+    errores_sint: list[str] = []  # TODOS los errores sintácticos encontrados
     traza_ll1 = []
 
     if "Recursivo" in metodo:
         try:
             parser = Parser(tokens)
             ast = parser.parse()
+        except ErroresSintacticos as e:
+            errores_sint = list(e.errores)
         except ErrorSintactico as e:
-            error_sintactico = str(e)
+            errores_sint = [str(e)]
         except Exception as e:
-            error_sintactico = f"Error interno en el Parser Recursivo: {str(e)}"
+            errores_sint = [f"Error interno en el Parser Recursivo: {str(e)}"]
     else:
         try:
-            traza, raiz_nodo, es_valido, msg_err = analisis_predictivo(tokens)
+            traza, raiz_nodo, es_valido, lista_err = analisis_predictivo_multi(tokens)
             traza_ll1 = traza
             ast = nodo_a_dict(raiz_nodo)
             if not es_valido:
-                error_sintactico = msg_err
+                errores_sint = list(lista_err)
         except Exception as e:
-             error_sintactico = f"Error interno en el Parser Predictivo: {str(e)}"
+            errores_sint = [f"Error interno en el Parser Predictivo: {str(e)}"]
+
+    # Texto único (numerado) para la IA y para saber si el parser falló
+    error_sintactico = texto_errores(errores_sint) or None
 
     return (utiles, lexer.errores, pd.DataFrame(filas), pd.DataFrame(errores),
-            lexer.resumen_identificadores(), chequeo, ast, error_sintactico, traza_ll1)
+            lexer.resumen_identificadores(), chequeo, ast, error_sintactico, traza_ll1,
+            errores_sint)
 
 
 # =============================================================================
@@ -320,22 +365,21 @@ if usar_key_personalizada:
         value=API_KEY_PRINCIPAL,
         type="password"
     )
-    
+
     api_key_temporal = st.sidebar.text_input(
         "⚡ API Key Temporal (Opcional)",
         value="",
         type="password",
         help="Si escribes una clave aquí, se usará temporalmente para la prueba sin alterar tu clave principal de arriba."
     )
-    
+
     api_key_activa = api_key_temporal.strip() if api_key_temporal.strip() else api_key_base
-    
+
     if api_key_temporal.strip():
         st.sidebar.warning("⚠️ Usando API Key temporal para esta prueba.")
 else:
     api_key_activa = None
     st.sidebar.caption("Usando variable de entorno `OPENAI_API_KEY` del sistema.")
-
 
 # =============================================================================
 #  CUERPO PRINCIPAL
@@ -347,24 +391,29 @@ if not codigo.strip():
     st.info("Elija una cadena predefinida, escriba código o suba un archivo.")
     st.stop()
 
-tokens, errores, tabla, tabla_err, identificadores, chequeo, ast, error_sintactico, traza_ll1 = analizar(codigo, metodo_analisis)
+tokens, errores, tabla, tabla_err, identificadores, chequeo, ast, error_sintactico, traza_ll1, errores_sint = analizar(
+    codigo, metodo_analisis)
 
 # --- Metricas ---
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Tokens Validos", len(tokens))
-c2.metric("Errores Léxicos", len(errores), delta=None if not errores else f"{len(errores)} fallos", delta_color="inverse")
+c2.metric("Errores Léxicos", len(errores), delta=None if not errores else f"{len(errores)} fallos",
+          delta_color="inverse")
 c3.metric("Líneas", codigo.count("\n") + 1)
 estado_parser = "Exitoso" if not error_sintactico else "Fallido"
-c4.metric("Parser", estado_parser, delta=None if not error_sintactico else "1 error", delta_color="inverse")
+n_err_sint = len(errores_sint)
+c4.metric("Parser", estado_parser,
+          delta=None if not n_err_sint else f"{n_err_sint} {'error' if n_err_sint == 1 else 'errores'}",
+          delta_color="inverse")
 
 with st.expander("Ver / editar el código fuente", expanded=False):
     st.code(codigo, language=None)
 
 # Pestañas de la aplicación
 pestañas = st.tabs([
-    "Árbol Sintáctico (AST)", 
-    "Traza de Pila LL(1)",        
-    "Tablas LL(1) / Conjuntos",   
+    "Árbol Sintáctico (AST)",
+    "Traza de Pila LL(1)",
+    "Tablas LL(1) / Conjuntos",
     "Código segmentado",
     "Flujo de tokens",
     "Tabla de símbolos",
@@ -378,28 +427,32 @@ pestañas = st.tabs([
 # --- Pestaña: Árbol Sintáctico (AST) ---
 with pestañas[0]:
     st.subheader(f"Árbol de Análisis Sintáctico — {metodo_analisis}")
-    
+
     if error_sintactico:
-        st.error(f"No se pudo completar el AST debido a un error de sintaxis: {error_sintactico}")
-        
+        mostrar_errores_sintacticos(
+            errores_sint,
+            "No se pudo completar el AST debido a un error de sintaxis",
+            "No se pudo completar el AST debido a errores de sintaxis",
+        )
+
         # Botón integrado de IA en caso de error sintáctico
         st.divider()
         st.markdown("### ✨ Asistente de IA para Corrección")
         if st.button("🤖 Analizar error sintáctico con Inteligencia Artificial", key="btn_ia_ast"):
             with st.spinner("El asistente de IA está analizando tu código y el fallo..."):
-                detalle_fallo = f"Error Sintáctico en el Parser: {error_sintactico}"
+                detalle_fallo = f"Errores sintácticos en el Parser ({len(errores_sint)}):\n{error_sintactico}"
                 sugerencia = analizar_error_con_ia(codigo, detalle_fallo, api_key=api_key_activa)
                 st.markdown(sugerencia)
-                
+
     elif ast:
         st.success("Análisis sintáctico completado con éxito.")
-        
+
         col_json, col_grafo = st.columns([1, 1])
-        
+
         with col_json:
             st.markdown("##### Estructura JSON (AST)")
             st.json(ast)
-            
+
         with col_grafo:
             st.markdown("##### Diagrama Gráfico Visual")
             if _ARBOL_GRAFICO_DISPONIBLE:
@@ -426,14 +479,18 @@ with pestañas[1]:
             df_traza = pd.DataFrame(traza_ll1)
             st.dataframe(df_traza, use_container_width=True, hide_index=True)
             if error_sintactico:
-                st.error(f"Error detectado durante el análisis de pila: {error_sintactico}")
+                mostrar_errores_sintacticos(
+                    errores_sint,
+                    "Error detectado durante el análisis de pila",
+                    "Errores detectados durante el análisis de pila",
+                )
         else:
             st.warning("No se generó traza de pila.")
 
 # --- PESTAÑA: Tablas LL(1) y Conjuntos ---
 with pestañas[2]:
     st.subheader("Motor Predictivo: Conjuntos y Matriz M[A,a]")
-    
+
     df_conjuntos = obtener_dataframes_conjuntos()
     df_tabla_M = obtener_dataframe_tabla()
 
@@ -442,7 +499,6 @@ with pestañas[2]:
 
     st.markdown("#### Tabla de Análisis Sintáctico M[A, a]")
     st.dataframe(df_tabla_M, use_container_width=True)
-
 
 # --- 1. Codigo segmentado ---------------------------------------------------
 with pestañas[3]:
@@ -471,9 +527,9 @@ with pestañas[5]:
 # --- 4. Errores y Asistente IA ----------------------------------------------
 with pestañas[6]:
     st.subheader("Reporte de errores léxicos y sintácticos")
-    
+
     tiene_problemas = bool(errores) or bool(error_sintactico)
-    
+
     if not tiene_problemas:
         st.success("¡Todo melo! No se encontró ningún error léxico ni sintáctico en esta entrada.")
     else:
@@ -484,18 +540,20 @@ with pestañas[6]:
             for e in errores:
                 st.markdown(f"**Error en fila {e.fila}, columna {e.columna}** — {e.mensaje}")
                 st.markdown(html_error(codigo, e), unsafe_allow_html=True)
-                
-        if error_sintactico:
-            st.markdown("#### ❌ Error Sintáctico")
-            st.error(error_sintactico)
+
+        if errores_sint:
+            st.markdown("#### ❌ Error Sintáctico" if len(errores_sint) == 1
+                        else f"#### ❌ Errores Sintácticos ({len(errores_sint)})")
+            mostrar_lista_errores(errores_sint)
 
         st.divider()
         st.markdown("### 🤖 Diagnóstico y Sugerencia con Inteligencia Artificial")
-        st.markdown("Deja que la IA examine el código fuente completo y los errores detectados para darte una solución guiada:")
-        
+        st.markdown(
+            "Deja que la IA examine el código fuente completo y los errores detectados para darte una solución guiada:")
+
         if st.button("✨ Consultar sugerencias de IA para estos errores", key="btn_ia_errores"):
             with st.spinner("Analizando con el modelo de lenguaje..."):
-                resumen_fallos = f"Errores léxicos: {len(errores)}. Error sintáctico: {error_sintactico}"
+                resumen_fallos = f"Errores léxicos: {len(errores)}. Errores sintácticos ({len(errores_sint)}):\n{error_sintactico}"
                 sugerencia_ia = analizar_error_con_ia(codigo, resumen_fallos, api_key=api_key_activa)
                 st.markdown(sugerencia_ia)
 
@@ -520,9 +578,9 @@ with pestañas[8]:
 with pestañas[9]:
     st.subheader("El analizador léxico y sintáctico, en Python puro")
     st.caption("Fragmentos leídos en vivo de los módulos core.")
-    
+
     _fuente_lexer = (RAIZ / "lexer.py").read_text(encoding="utf-8") if (RAIZ / "lexer.py").exists() else "No encontrado"
-    
+
     with st.expander("Ver lexer.py completo"):
         st.code(_fuente_lexer, language="python")
 
