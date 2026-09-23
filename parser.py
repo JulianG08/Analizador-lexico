@@ -8,7 +8,20 @@ Recuperación de errores (modo pánico):
     `self.errores`, se sincroniza con un token "seguro" y el análisis continúa.
     Al terminar `parse()`, si hubo errores, lanza `ErroresSintacticos` con la
     lista completa (`e.errores`) y el árbol parcial (`e.cst`).
+
+Construcción paso a paso:
+    `parse_con_pasos()` ejecuta el mismo análisis pero además graba, en orden,
+    cada nodo que aparece en el árbol (una "foto" del árbol completo tal como
+    va quedando en ese instante). Sirve para mostrar en pantalla, con botones
+    de Siguiente/Anterior, cómo se va construyendo el árbol. La construcción
+    del árbol se hace por "adjunción" automática: cada nodo (no terminal,
+    terminal, ε o error) se cuelga solo del no terminal que esté abierto en
+    ese momento (ver `_adjuntar`); por eso el valor de retorno real de cada
+    `parse_X` ya no se usa para armar el árbol, solo para corregir el `tipo`
+    en los pocos casos donde un método puede devolver más de un tipo de nodo.
 """
+import copy
+import functools
 
 
 class ErrorSintactico(Exception):
@@ -69,6 +82,12 @@ class Parser:
         self.errores = []
         self._pos_ultimo_error = -1
 
+        # --- Estado para la construcción paso a paso del árbol (ver parse_con_pasos) ---
+        self._trazando = False        # si True, se graban pasos en self._pasos
+        self._pasos = []              # lista de pasos grabados
+        self._pila_padres = []        # no terminales actualmente "abiertos" (pila de llamadas)
+        self._raiz_trazado = None     # nodo raíz del árbol que se va armando
+
     # ==========================================
     # HELPER MAPPING
     # ==========================================
@@ -102,23 +121,82 @@ class Parser:
 
             if tipo in esperados or lexema in esperados:
                 self.avanzar()
-                return {"tipo": f"{tipo} ({lexema})", "es_terminal": True, "hijos": []}
+                nodo = {"tipo": f"{tipo} ({lexema})", "es_terminal": True, "hijos": []}
+                return self._adjuntar(nodo, f"Coincidencia: {tipo} ('{lexema}')")
 
-        fila = getattr(self.token_actual, 'fila', getattr(self.token_actual, 'linea', '?'))
-        col = getattr(self.token_actual, 'columna', '?')
-        encontrado = self._obtener_lexema() if self.token_actual else "FIN_DE_ARCHIVO"
         esperados_str = " | ".join(map(str, esperados))
+        if self.token_actual:
+            fila = getattr(self.token_actual, 'fila', getattr(self.token_actual, 'linea', '?'))
+            col = getattr(self.token_actual, 'columna', '?')
+            mensaje = (
+                f"Error Sintáctico en [Fila {fila}, Columna {col}]: "
+                f"Se esperaba '{esperados_str}', pero se encontró '{self._obtener_lexema()}'"
+            )
+        else:
+            mensaje = (
+                f"Error Sintáctico al final del archivo: "
+                f"Se esperaba '{esperados_str}', pero se encontró 'FIN_DE_ARCHIVO'"
+            )
 
-        raise ErrorSintactico(
-            f"Error Sintáctico en [Fila {fila}, Columna {col}]: "
-            f"Se esperaba '{esperados_str}', pero se encontró '{encontrado}'"
+        # Recuperación por inserción: si lo que faltó es una palabra clave (dele_pues,
+        # asi_quedo, ...), o el token encontrado es una palabra de control (inicio de
+        # sentencia, cierre) o el fin de archivo, se registra el error y se continúa
+        # como si el terminal esperado hubiera estado presente (sin consumir nada).
+        # En los demás casos (p. ej. falta un ')' y aparece basura) se aborta la
+        # construcción y se sincroniza en el nivel superior.
+        insertar = (
+            self.token_actual is None
+            or any(str(e).startswith("KW_") for e in esperados)
+            or self._es_palabra_de_control()
         )
+        if insertar:
+            self._registrar_error(ErrorSintactico(mensaje))
+            nodo = {"tipo": f"{esperados[0]} (faltante)", "es_terminal": True, "hijos": []}
+            return self._adjuntar(nodo, f"Error (recuperado): {mensaje}")
+        raise ErrorSintactico(mensaje)
 
     def _nodo_eps(self):
-        return {"tipo": "ε", "es_terminal": True, "hijos": []}
+        nodo = {"tipo": "ε", "es_terminal": True, "hijos": []}
+        return self._adjuntar(nodo, "Producción vacía (ε)")
 
-    def _nodo_error(self):
-        return {"tipo": "<error>", "es_terminal": True, "hijos": []}
+    def _nodo_error(self, mensaje=None):
+        nodo = {"tipo": "<error>", "es_terminal": True, "hijos": []}
+        accion = f"Error (recuperado): {mensaje}" if mensaje else "Error: se omite esta parte y se sincroniza"
+        return self._adjuntar(nodo, accion)
+
+    # ==========================================
+    # CONSTRUCCIÓN PASO A PASO DEL ÁRBOL
+    # ==========================================
+
+    LIMITE_PASOS = 4000  # tope de seguridad para no grabar árboles gigantes
+
+    def _adjuntar(self, nodo, accion=""):
+        """
+        Cuelga `nodo` del no terminal actualmente "abierto" (el que está en
+        la cima de `_pila_padres`), o lo fija como raíz si es el primer nodo.
+        Si se está trazando (`parse_con_pasos`), además graba un paso.
+        """
+        if self._pila_padres:
+            self._pila_padres[-1]["hijos"].append(nodo)
+        elif self._raiz_trazado is None:
+            self._raiz_trazado = nodo
+        if self._trazando:
+            self._registrar_paso(accion)
+        return nodo
+
+    def _registrar_paso(self, accion):
+        if len(self._pasos) >= self.LIMITE_PASOS:
+            return
+        pila_visual = " ".join(p["tipo"] for p in self._pila_padres)
+        entrada_visual = " ".join(self._obtener_tipo(t) or "?" for t in self.tokens[self.pos:])
+        arbol = copy.deepcopy(self._raiz_trazado) if self._raiz_trazado is not None else None
+        self._pasos.append({
+            "Paso": len(self._pasos) + 1,
+            "Acción": accion,
+            "Pila": pila_visual,
+            "Entrada": entrada_visual,
+            "Arbol": arbol,
+        })
 
     # ==========================================
     # RECUPERACIÓN DE ERRORES (MODO PÁNICO)
@@ -140,16 +218,22 @@ class Parser:
     def _es_inicio_sentencia(self):
         return self._coincide(INICIO_SENT_LEX, INICIO_SENT_TIPO)
 
+    def _es_palabra_de_control(self):
+        """Inicio de sentencia con palabra clave (sin contar identificadores) o cierre."""
+        return (self._coincide(INICIO_SENT_LEX, INICIO_SENT_TIPO - {"IDENTIFICADOR"})
+                or self._es_frontera())
+
     def _es_inicio_funcion(self):
         return self._coincide(("hagale_pues",), ("KW_FUNCION",))
 
-    def _registrar_error(self, error):
+    def _registrar_error(self, error, descarte=False):
         """
         Guarda el error. Si ya se reportó un error en este mismo token, se
-        descarta (suele ser un error en cascada). El fin de archivo se exceptúa
-        para poder reportar cada construcción que quedó sin cerrar.
+        descarta (suele ser un error en cascada). Se exceptúan el fin de archivo
+        (para reportar cada construcción sin cerrar) y los tokens sobrantes que
+        se descartan (`descarte=True`), que siempre se reportan.
         """
-        if self.token_actual is None or self.pos != self._pos_ultimo_error:
+        if descarte or self.token_actual is None or self.pos != self._pos_ultimo_error:
             self.errores.append(str(error))
         self._pos_ultimo_error = self.pos
 
@@ -200,21 +284,26 @@ class Parser:
         try:
             return self.parse_declaracion()
         except ErrorSintactico as e:
-            self._registrar_error(e)
+            # Token sobrante: la declaración falló en su primer token (no se consumió nada)
+            sobrante = (self.pos == pos_inicio and not era_funcion)
+            self._registrar_error(e, descarte=sobrante)
             if era_funcion:
                 self._sincronizar_funcion()
             else:
                 self._sincronizar_declaracion(pos_inicio)
-            return self._nodo_error()
+            return self._nodo_error(str(e))
 
     def _sentencia_segura(self, tokens_cierre):
         pos_inicio = self.pos
         try:
             return self.parse_sentencia()
         except ErrorSintactico as e:
-            self._registrar_error(e)
+            # Token sobrante dentro del bloque (que no es un cierre ni inicio de función)
+            sobrante = (self.pos == pos_inicio and self.token_actual is not None
+                        and not self._es_cierre(tokens_cierre) and not self._es_frontera())
+            self._registrar_error(e, descarte=sobrante)
             self._sincronizar_bloque(pos_inicio, tokens_cierre)
-            return self._nodo_error()
+            return self._nodo_error(str(e))
 
     def _caso_seguro(self):
         try:
@@ -222,7 +311,7 @@ class Parser:
         except ErrorSintactico as e:
             self._registrar_error(e)
             self._sincronizar_caso()
-            return self._nodo_error()
+            return self._nodo_error(str(e))
 
     # ==========================================
     # PUNTO DE ENTRADA
@@ -239,6 +328,31 @@ class Parser:
         if self.errores:
             raise ErroresSintacticos(self.errores, cst)
         return cst
+
+    def parse_con_pasos(self):
+        """
+        Analiza todo el programa igual que parse(), pero además graba la
+        secuencia de pasos con los que se construye el árbol (uno por cada
+        nodo que aparece), para mostrarla paso a paso con botones de
+        Siguiente/Anterior. A diferencia de parse(), NUNCA lanza una
+        excepción por errores sintácticos: siempre retorna una tupla.
+
+        Retorna: (cst, pasos, errores)
+            cst:     árbol completo (parcial si hubo errores)
+            pasos:   lista de dicts {"Paso","Acción","Pila","Entrada","Arbol"}
+            errores: lista de mensajes de error (vacía si no hubo ninguno)
+        """
+        self.errores = []
+        self._pos_ultimo_error = -1
+        self._pasos = []
+        self._pila_padres = []
+        self._raiz_trazado = None
+        self._trazando = True
+        try:
+            self.parse_programa()
+        finally:
+            self._trazando = False
+        return self._raiz_trazado, self._pasos, list(self.errores)
 
     # ==========================================
     # 3.1 PROGRAMA Y DECLARACIONES
@@ -689,3 +803,66 @@ class Parser:
             nodo_ar = self.parse_arg_resto()
             return {"tipo": "<arg_resto>", "es_terminal": False, "hijos": [tok_coma, nodo_expr, nodo_ar]}
         return {"tipo": "<arg_resto>", "es_terminal": False, "hijos": [self._nodo_eps()]}
+
+
+# ==========================================
+# INSTRUMENTACIÓN AUTOMÁTICA PARA parse_con_pasos()
+# ==========================================
+#
+# Envuelve cada método parse_X (X = no terminal de la gramática) para que,
+# antes de ejecutar su cuerpo real, cree un nodo "placeholder" del no
+# terminal correspondiente y lo cuelgue (vía _adjuntar) del no terminal que
+# esté actualmente abierto. El árbol se construye así por efectos
+# secundarios de _adjuntar/match/_nodo_eps/_nodo_error; el valor de retorno
+# real de cada parse_X ya NO se usa para armar el árbol (solo para corregir
+# el "tipo" del nodo en los pocos métodos que pueden devolver más de un tipo
+# de nodo, p. ej. parse_sent_asignacion_o_llamada). Si el método real lanza
+# una excepción, el nodo placeholder se retira de su padre (para no dejar
+# nodos a medio construir en el árbol) y la excepción se vuelve a lanzar.
+#
+# Esto no cambia el árbol final que produce parse()/parse_programa() (sigue
+# siendo exactamente el mismo, con los mismos tipos e hijos); solo cambia
+# CÓMO se arma internamente, para poder grabar el proceso paso a paso.
+
+def _envolver_con_pasos(nombre_metodo, metodo):
+    etiqueta = f"<{nombre_metodo[len('parse_'):]}>"
+
+    @functools.wraps(metodo)
+    def envoltura(self, *args, **kwargs):
+        padre = self._pila_padres[-1] if self._pila_padres else None
+        placeholder = {"tipo": etiqueta, "es_terminal": False, "hijos": []}
+        self._adjuntar(placeholder, f"Expandir {etiqueta}")
+        self._pila_padres.append(placeholder)
+        try:
+            resultado_real = metodo(self, *args, **kwargs)
+        except BaseException:
+            self._pila_padres.pop()
+            if padre is not None:
+                padre["hijos"] = [h for h in padre["hijos"] if h is not placeholder]
+            elif self._raiz_trazado is placeholder:
+                self._raiz_trazado = None
+            raise
+        else:
+            self._pila_padres.pop()
+            # Algunos métodos (p. ej. parse_sent_asignacion_o_llamada) pueden
+            # devolver un tipo distinto según la rama tomada; se corrige aquí.
+            if isinstance(resultado_real, dict) and resultado_real.get("tipo") != placeholder["tipo"]:
+                placeholder["tipo"] = resultado_real["tipo"]
+            return placeholder
+
+    return envoltura
+
+
+# Métodos que empiezan con "parse_" pero NO son reglas de la gramática y por
+# lo tanto no deben instrumentarse.
+_NO_INSTRUMENTAR = {"parse_con_pasos"}
+
+
+def _instrumentar_parser():
+    for _nombre in list(vars(Parser)):
+        if (_nombre.startswith("parse_") and _nombre not in _NO_INSTRUMENTAR
+                and callable(getattr(Parser, _nombre))):
+            setattr(Parser, _nombre, _envolver_con_pasos(_nombre, getattr(Parser, _nombre)))
+
+
+_instrumentar_parser()

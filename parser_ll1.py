@@ -15,10 +15,30 @@ Recuperación de errores:
             * si no, se descarta 'a' y se reintenta (modo pánico).
     Para no llenar la salida de errores en cascada, por defecto se reporta a lo
     sumo un error por token de entrada (ver `un_error_por_token`).
+
+Construcción paso a paso:
+    Cada paso de la traza incluye además una clave "Arbol": una foto (dict)
+    del árbol completo tal como va quedando justo después de esa acción. Con
+    eso se puede mostrar, con botones de Siguiente/Anterior, cómo se va
+    construyendo el árbol. Para no gastar tiempo/memoria de más en árboles
+    grandes, esta foto se deja de grabar pasado LIMITE_PASOS_ARBOL (el
+    análisis sigue normalmente; solo esa clave queda en None).
 """
 from tabla_ll1 import generar_datos_completos_ll1, es_terminal
 
 EPS = "ε"
+LIMITE_PASOS_ARBOL = 4000  # tope de seguridad para no grabar árboles gigantes
+
+
+def _nodo_a_dict(nodo):
+    """Convierte un NodoArbol (y sus hijos) a un dict {'tipo','es_terminal','hijos'}."""
+    if nodo is None:
+        return None
+    return {
+        "tipo": nodo.valor,
+        "es_terminal": nodo.tipo != "no_terminal",
+        "hijos": [_nodo_a_dict(h) for h in nodo.hijos],
+    }
 
 
 class NodoArbol:
@@ -151,7 +171,9 @@ def analisis_predictivo_multi(tokens, un_error_por_token=True):
         if tope_simbolo == "$":
             if en_eof:
                 accion = "Aceptar: Fin de cadena" if not errores else "Fin de cadena (el análisis terminó con errores)"
-                traza.append({"Paso": paso, "Pila": estado_pila, "Entrada": estado_entrada, "Acción": accion})
+                arbol_paso = (_nodo_a_dict(raiz) if len(traza) < LIMITE_PASOS_ARBOL else None)
+                traza.append({"Paso": paso, "Pila": estado_pila, "Entrada": estado_entrada,
+                              "Acción": accion, "Arbol": arbol_paso})
                 break
             # Sobran tokens al final: se reporta y se descartan
             mensaje = f"Se esperaba fin de archivo, pero se encontró {encontrado}{donde}"
@@ -238,7 +260,9 @@ def analisis_predictivo_multi(tokens, un_error_por_token=True):
                     for nodo in reversed(hijos_creados):
                         pila.append((nodo.valor, nodo))
 
-        traza.append({"Paso": paso, "Pila": estado_pila, "Entrada": estado_entrada, "Acción": accion})
+        arbol_paso = (_nodo_a_dict(raiz) if len(traza) < LIMITE_PASOS_ARBOL else None)
+        traza.append({"Paso": paso, "Pila": estado_pila, "Entrada": estado_entrada,
+                      "Acción": accion, "Arbol": arbol_paso})
         paso += 1
 
     return traza, raiz, len(errores) == 0, errores

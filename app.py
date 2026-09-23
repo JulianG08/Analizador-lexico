@@ -111,6 +111,106 @@ def nodo_a_dict(nodo: NodoArbol) -> dict:
     return d
 
 
+def snapshot_a_grafo(nodo: dict) -> dict:
+    """
+    Convierte un nodo de los pasos del árbol (formato {'tipo','es_terminal','hijos'},
+    el mismo que usan ambos parsers) al esquema {'name','type','children'} que
+    espera generar_grafo_ast/capturar_arbol_ascii (el mismo que produce
+    nodo_a_dict a partir de un NodoArbol).
+    """
+    if not nodo:
+        return {}
+    d = {"name": nodo.get("tipo", ""),
+         "type": "terminal" if nodo.get("es_terminal") else "no_terminal"}
+    hijos = nodo.get("hijos") or []
+    if hijos:
+        d["children"] = [snapshot_a_grafo(h) for h in hijos]
+    return d
+
+
+# =============================================================================
+#  ÁRBOL PASO A PASO (Siguiente / Anterior)
+# =============================================================================
+
+def renderizar_stepper_arbol(pasos: list[dict], key_prefix: str) -> None:
+    """
+    Muestra los pasos de construcción del árbol: primero el diagrama a todo
+    lo ancho, y debajo los controles (Anterior/Siguiente y una barra para
+    saltar directo a un paso), sincronizados entre sí. `pasos` es una lista
+    de dicts {"Paso","Acción","Pila","Entrada","Arbol"}; la vienen
+    produciendo tanto Parser.parse_con_pasos() (método recursivo) como
+    analisis_predictivo_multi() (método LL(1)).
+    """
+    total = len(pasos)
+    if total == 0:
+        st.info("No hay pasos para mostrar.")
+        return
+
+    clave_idx = f"paso_idx_{key_prefix}"
+    clave_slider = f"paso_slider_{key_prefix}"
+    clave_firma = f"paso_firma_{key_prefix}"
+
+    # Si cambió el código/método (y por lo tanto la cantidad de pasos), se
+    # vuelve al primer paso para no quedar apuntando a un índice viejo.
+    firma = f"{key_prefix}:{total}"
+    if st.session_state.get(clave_firma) != firma:
+        st.session_state[clave_firma] = firma
+        st.session_state[clave_idx] = 0
+        st.session_state[clave_slider] = 1
+
+    if clave_idx not in st.session_state:
+        st.session_state[clave_idx] = 0
+    if clave_slider not in st.session_state:
+        st.session_state[clave_slider] = st.session_state[clave_idx] + 1
+
+    idx = min(st.session_state[clave_idx], total - 1)
+
+    # El diagrama debe verse ARRIBA de los controles, pero para dibujar el
+    # paso correcto (sin quedar un clic atrasado) hay que leer primero los
+    # botones/la barra, que están más abajo en el código. Se resuelve con un
+    # contenedor: reserva el espacio de arriba y se rellena al final, ya con
+    # el índice definitivo.
+    zona_grafico = st.container()
+
+    # --- Controles, debajo del diagrama ---
+    c_prev, c_slider, c_next = st.columns([1, 3, 1])
+    with c_prev:
+        if st.button("◀ Anterior", key=f"btn_prev_{key_prefix}",
+                     disabled=(idx <= 0), use_container_width=True):
+            idx = max(0, idx - 1)
+            st.session_state[clave_idx] = idx
+            st.session_state[clave_slider] = idx + 1
+    with c_next:
+        if st.button("Siguiente ▶", key=f"btn_next_{key_prefix}",
+                     disabled=(idx >= total - 1), use_container_width=True):
+            idx = min(total - 1, idx + 1)
+            st.session_state[clave_idx] = idx
+            st.session_state[clave_slider] = idx + 1
+    with c_slider:
+        idx = st.slider("Ir al paso", 1, total, key=clave_slider) - 1
+
+    st.session_state[clave_idx] = idx
+    paso = pasos[idx]
+
+    with zona_grafico:
+        arbol_paso = paso.get("Arbol")
+        if arbol_paso is None:
+            st.info("El árbol de este paso ya no se grabó (programa demasiado largo).")
+        elif _ARBOL_GRAFICO_DISPONIBLE:
+            grafo_dict = snapshot_a_grafo(arbol_paso)
+            try:
+                st.graphviz_chart(generar_grafo_ast(grafo_dict), use_container_width=True)
+            except Exception:
+                st.warning("No se pudo renderizar el gráfico vectorial. Mostrando respaldo ASCII:")
+                st.code(capturar_arbol_ascii(grafo_dict), language=None)
+        else:
+            st.info("Módulo gráfico no disponible.")
+
+    st.caption(f"Paso **{idx + 1} / {total}** — {paso['Acción']}")
+    with st.expander("Ver pila y entrada restante en este paso"):
+        st.code(f"Pila:    {paso['Pila']}\nEntrada: {paso['Entrada']}", language=None)
+
+
 # =============================================================================
 #  ERRORES SINTÁCTICOS (uno o varios)
 # =============================================================================
@@ -187,21 +287,22 @@ def analizar(codigo: str, metodo: str):
     ast = None
     errores_sint: list[str] = []  # TODOS los errores sintácticos encontrados
     traza_ll1 = []
+    pasos_arbol: list[dict] = []  # pasos {"Paso","Acción","Pila","Entrada","Arbol"}
+    # para el navegador paso a paso del árbol
 
     if "Recursivo" in metodo:
         try:
             parser = Parser(tokens)
-            ast = parser.parse()
-        except ErroresSintacticos as e:
-            errores_sint = list(e.errores)
-        except ErrorSintactico as e:
-            errores_sint = [str(e)]
+            ast, pasos_arbol, errores_sint = parser.parse_con_pasos()
         except Exception as e:
+            ast = None
+            pasos_arbol = []
             errores_sint = [f"Error interno en el Parser Recursivo: {str(e)}"]
     else:
         try:
             traza, raiz_nodo, es_valido, lista_err = analisis_predictivo_multi(tokens)
             traza_ll1 = traza
+            pasos_arbol = traza  # cada fila de la traza ya trae la clave "Arbol"
             ast = nodo_a_dict(raiz_nodo)
             if not es_valido:
                 errores_sint = list(lista_err)
@@ -213,7 +314,7 @@ def analizar(codigo: str, metodo: str):
 
     return (utiles, lexer.errores, pd.DataFrame(filas), pd.DataFrame(errores),
             lexer.resumen_identificadores(), chequeo, ast, error_sintactico, traza_ll1,
-            errores_sint)
+            errores_sint, pasos_arbol)
 
 
 # =============================================================================
@@ -391,8 +492,8 @@ if not codigo.strip():
     st.info("Elija una cadena predefinida, escriba código o suba un archivo.")
     st.stop()
 
-tokens, errores, tabla, tabla_err, identificadores, chequeo, ast, error_sintactico, traza_ll1, errores_sint = analizar(
-    codigo, metodo_analisis)
+(tokens, errores, tabla, tabla_err, identificadores, chequeo, ast, error_sintactico,
+ traza_ll1, errores_sint, pasos_arbol) = analizar(codigo, metodo_analisis)
 
 # --- Metricas ---
 c1, c2, c3, c4 = st.columns(4)
@@ -444,30 +545,16 @@ with pestañas[0]:
                 sugerencia = analizar_error_con_ia(codigo, detalle_fallo, api_key=api_key_activa)
                 st.markdown(sugerencia)
 
+        if pasos_arbol:
+            st.divider()
+            st.markdown("#### Cómo se armó el árbol hasta el error")
+            renderizar_stepper_arbol(pasos_arbol, key_prefix=f"ast_{metodo_analisis}")
+
     elif ast:
         st.success("Análisis sintáctico completado con éxito.")
-
-        col_json, col_grafo = st.columns([1, 1])
-
-        with col_json:
-            st.markdown("##### Estructura JSON (AST)")
+        renderizar_stepper_arbol(pasos_arbol, key_prefix=f"ast_{metodo_analisis}")
+        with st.expander("Ver JSON completo del árbol final"):
             st.json(ast)
-
-        with col_grafo:
-            st.markdown("##### Diagrama Gráfico Visual")
-            if _ARBOL_GRAFICO_DISPONIBLE:
-                codigo_dot = generar_grafo_ast(ast)
-                try:
-                    st.graphviz_chart(codigo_dot, use_container_width=True)
-                except Exception:
-                    st.warning("No se pudo renderizar el gráfico vectorial. Mostrando respaldo ASCII:")
-                    st.code(capturar_arbol_ascii(ast), language=None)
-            else:
-                st.info("Módulo gráfico no disponible.")
-
-            if _ARBOL_GRAFICO_DISPONIBLE:
-                with st.expander("Ver árbol sintáctico en formato texto ASCII"):
-                    st.code(capturar_arbol_ascii(ast), language=None)
 
 # --- PESTAÑA: Traza de Pila LL(1) ---
 with pestañas[1]:
@@ -476,7 +563,7 @@ with pestañas[1]:
         st.info("Debe seleccionar el Método 2 (Predictivo LL1) en la barra lateral para ver la traza.")
     else:
         if traza_ll1:
-            df_traza = pd.DataFrame(traza_ll1)
+            df_traza = pd.DataFrame(traza_ll1)[["Paso", "Pila", "Entrada", "Acción"]]
             st.dataframe(df_traza, use_container_width=True, hide_index=True)
             if error_sintactico:
                 mostrar_errores_sintacticos(
