@@ -199,7 +199,7 @@ def renderizar_stepper_arbol(pasos: list[dict], key_prefix: str) -> None:
         elif _ARBOL_GRAFICO_DISPONIBLE:
             grafo_dict = snapshot_a_grafo(arbol_paso)
             try:
-                st.graphviz_chart(generar_grafo_ast(grafo_dict), use_container_width=True)
+                st.graphviz_chart(generar_grafo_ast(grafo_dict), use_container_width=False)
             except Exception:
                 st.warning("No se pudo renderizar el gráfico vectorial. Mostrando respaldo ASCII:")
                 st.code(capturar_arbol_ascii(grafo_dict), language=None)
