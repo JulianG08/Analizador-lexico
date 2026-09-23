@@ -1,0 +1,29 @@
+digraph CST {
+    graph [bgcolor="transparent", rankdir=TB, nodesep=0.2, ranksep=0.4];
+    edge [color="#94A3B8", penwidth=1.2];
+    node1 [label="&lt;programa&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node2 [label="&lt;lista_declaraciones&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node1 -> node2;
+    node3 [label="&lt;declaracion&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node2 -> node3;
+    node4 [label="&lt;sentencia&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node3 -> node4;
+    node5 [label="&lt;sent_lectura&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node4 -> node5;
+    node6 [label="KW_LECTURA (escuche_pues)", shape=box, style="filled,rounded", color="#10B981", fontname="Courier", fontcolor="#F8FAFC", fillcolor="#065F46"];
+    node5 -> node6;
+    node7 [label="PAR_ABRE (()", shape=box, style="filled,rounded", color="#10B981", fontname="Courier", fontcolor="#F8FAFC", fillcolor="#065F46"];
+    node5 -> node7;
+    node8 [label="IDENTIFICADOR (edad)", shape=box, style="filled,rounded", color="#10B981", fontname="Courier", fontcolor="#F8FAFC", fillcolor="#065F46"];
+    node5 -> node8;
+    node9 [label="PAR_CIERRA ())", shape=box, style="filled,rounded", color="#10B981", fontname="Courier", fontcolor="#F8FAFC", fillcolor="#065F46"];
+    node5 -> node9;
+    node10 [label="&lt;lista_declaraciones&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node2 -> node10;
+    node11 [label="&lt;declaracion&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node10 -> node11;
+    node12 [label="&lt;sentencia&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node11 -> node12;
+    node13 [label="&lt;sent_declaracion&gt;", shape=box, style="filled,rounded", color="#38BDF8", fontname="Courier-Bold", fontcolor="#F8FAFC", fillcolor="#0F172A"];
+    node12 -> node13;
+}
