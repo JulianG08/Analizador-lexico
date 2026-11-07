@@ -1,0 +1,25 @@
+// ============================================================================
+//  CASO 3 de 3 — ERRORES SINTACTICOS
+//  Los tokens existen y estan bien escritos (el lexer no se queja), pero la
+//  secuencia no obedece la gramatica. El parser los reporta con fila y
+//  columna y aplica recuperacion para seguir encontrando mas de uno.
+// ============================================================================
+
+// Falta 'dele_pues' despues de la condicion del mientras_que.
+pille_pues numerito i = 0
+mientras_que i < 10
+    pille_pues i = i + 1
+hasta_ahi
+
+// Falta la clausula 'hasta' del pa_cada.
+pa_cada k desde 1 dele_pues
+    hable_pues(k)
+listo_pues
+
+// Falta cerrar el parentesis de la llamada.
+hable_pues("hola"
+
+// Falta 'entonces_pues' despues de la condicion.
+si_acaso i > 5
+    hable_pues("grande")
+asi_quedo

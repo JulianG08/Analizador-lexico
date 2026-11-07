@@ -308,3 +308,91 @@ def analizar_error_semantico_con_ia(codigo_fuente, errores_semanticos,
         return response.choices[0].message.content
     except Exception as e:
         return f"❌ Ocurrió un error al comunicarse con la API de OpenAI: {str(e)}"
+
+
+# =============================================================================
+#  BONUS ENTREGA FINAL — MODALIDAD C: VALIDACIÓN + OPTIMIZACIÓN DEL CÓDIGO
+#  GENERADO POR LA FASE SDT
+# =============================================================================
+#
+# A diferencia del bonus del Quiz 4 (que enriquecía los errores semánticos del
+# código FUENTE), aquí el objeto de estudio es el código DESTINO: el texto
+# Gleam que produjo `traductor_sdt.py`. El modelo hace dos tareas sobre él:
+#
+#   1. Validación: ¿es sintáctica y semánticamente correcto en Gleam?
+#   2. Optimización: ¿qué se podría escribir de forma más idiomática?
+#
+# Es una capa ADICIONAL. El compilador produce su salida sin ella; si no hay
+# paquete, clave o red, la interfaz lo indica y todo lo demás sigue igual.
+
+# El prompt se expone como constante para poder documentarlo en el PDF y
+# mostrarlo en la interfaz: el enunciado pide describir el prompt utilizado.
+PROMPT_VALIDACION_GLEAM = """Eres un revisor experto del lenguaje Gleam.
+
+El código de abajo fue GENERADO automáticamente por un compilador que traduce
+desde Paisascript (un lenguaje imperativo con jerga paisa) hacia Gleam. El
+compilador ya garantizó que el programa fuente es léxica, sintáctica y
+semánticamente válido; lo que hay que revisar es la calidad del código destino.
+
+Responde en español, en dos secciones y sin rodeos:
+
+1. ✅ VALIDEZ — ¿compila en Gleam? Revisa en particular:
+   - que no se mezclen Int y Float (Gleam usa `+` y `+.` como operadores
+     DISTINTOS, lo mismo con `-` `*` `/` y los relacionales);
+   - que todo bloque termine en una expresión y nunca en un `let`;
+   - que cada módulo usado (`io.`, `int.`, `list.`, ...) esté importado;
+   - que todas las ramas de un mismo `case` devuelvan el mismo tipo;
+   - que las funciones recursivas reciban todas las variables que usan.
+   Si encuentras un problema, cita la línea y explica por qué rompe.
+   Si no encuentras ninguno, dilo claramente.
+
+2. ⚡ OPTIMIZACIÓN — propón mejoras concretas e idiomáticas de Gleam
+   (uso de `|>`, `list.fold` en vez de recursión manual, nombres más claros,
+   simplificaciones). Muestra el fragmento reescrito.
+
+No inventes problemas para rellenar: si el código está bien, dilo."""
+
+
+def validar_codigo_generado(codigo_gleam, codigo_fuente=None, api_key=None):
+    """Bonus (Modalidad C): valida y propone mejoras sobre la salida del SDT.
+
+    Recibe el código Gleam que produjo la fase SDT y, opcionalmente, el
+    programa Paisascript del que salió, para que el modelo pueda contrastar
+    intención y resultado.
+
+    Devuelve el texto de la respuesta, o un mensaje explicativo si la
+    integración no está disponible. Nunca lanza: es una capa opcional y no
+    debe tumbar al compilador.
+    """
+    if not OPENAI_DISPONIBLE:
+        return MENSAJE_SIN_PAQUETE
+
+    cliente = obtener_cliente_openai(api_key)
+    if not cliente:
+        return MENSAJE_SIN_CLAVE
+
+    if not (codigo_gleam or "").strip():
+        return ("No hay código generado que validar. El compilador solo "
+                "produce salida cuando no hay errores en ninguna fase.")
+
+    partes = []
+    if codigo_fuente:
+        partes.append("PROGRAMA FUENTE EN PAISASCRIPT:\n"
+                      f"```\n{codigo_fuente}\n```\n")
+    partes.append("CÓDIGO GLEAM GENERADO POR LA FASE SDT:\n"
+                  f"```gleam\n{codigo_gleam}\n```")
+    prompt_usuario = "\n".join(partes)
+
+    try:
+        respuesta = cliente.chat.completions.create(
+            model=leer_secreto("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[
+                {"role": "system", "content": PROMPT_VALIDACION_GLEAM},
+                {"role": "user", "content": prompt_usuario},
+            ],
+            temperature=0.2,
+            max_tokens=900,
+        )
+        return respuesta.choices[0].message.content
+    except Exception as e:                                      # noqa: BLE001
+        return f"❌ Ocurrió un error al comunicarse con la API de OpenAI: {e}"

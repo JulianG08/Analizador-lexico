@@ -52,6 +52,7 @@ try:
         OPENAI_DISPONIBLE,
         analizar_error_con_ia,
         analizar_error_semantico_con_ia,
+        validar_codigo_generado,
         origen_api_key,
     )
 except Exception:
@@ -70,12 +71,17 @@ except Exception:
     def analizar_error_con_ia(codigo_fuente, error_detectado, api_key=None):
         return _MENSAJE_SIN_IA
 
+    def validar_codigo_generado(codigo_gleam, codigo_fuente=None, api_key=None):
+        return ("La integración con IA no está disponible: falta el paquete "
+                "`openai`. El compilador funciona igual sin ella.")
+
     def analizar_error_semantico_con_ia(codigo_fuente, errores_semanticos,
                                         tabla_simbolos=None, api_key=None):
         return _MENSAJE_SIN_IA
 
 # --- ANÁLISIS SEMÁNTICO (Quiz 4 / Entrega 4) ---
 from analizador_semantico import AnalizadorSemantico, ErrorSemantico, TablaSimbolos
+from traductor_sdt import TraductorSDT
 
 RAIZ = Path(__file__).parent
 
@@ -435,9 +441,21 @@ def analizar(codigo: str, metodo: str):
             )]
     tabla_sem = analizador_sem.tabla if analizador_sem is not None else TablaSimbolos()
 
+    # --- Fase 4: traducción orientada por la sintaxis (SDT) ----------------
+    # El enunciado de la entrega final es explícito: si hay errores en
+    # cualquiera de las fases de análisis, NO se genera código de salida.
+    codigo_gleam = ""
+    error_sdt = ""
+    hay_errores_previos = bool(lexer.errores) or bool(errores_sint) or bool(errores_sem)
+    if cst_semantico is not None and not hay_errores_previos:
+        try:
+            codigo_gleam = TraductorSDT(cst_semantico, tabla_sem).traducir()
+        except Exception as e:
+            error_sdt = f"Error interno del traductor SDT: {e}"
+
     return (utiles, lexer.errores, pd.DataFrame(filas), pd.DataFrame(errores),
             lexer.resumen_identificadores(), chequeo, ast, error_sintactico, traza_ll1,
-            errores_sint, pasos_arbol, errores_sem, tabla_sem)
+            errores_sint, pasos_arbol, errores_sem, tabla_sem, codigo_gleam, error_sdt)
 
 
 # =============================================================================
@@ -624,7 +642,8 @@ if not codigo.strip():
     st.stop()
 
 (tokens, errores, tabla, tabla_err, identificadores, chequeo, ast, error_sintactico,
- traza_ll1, errores_sint, pasos_arbol, errores_sem, tabla_sem) = analizar(codigo, metodo_analisis)
+ traza_ll1, errores_sint, pasos_arbol, errores_sem, tabla_sem,
+ codigo_gleam, error_sdt) = analizar(codigo, metodo_analisis)
 
 # Para el método Ascendente LALR(1), generamos tokens vía léxico
 # ya que analizar() está diseñado para LL(1)
@@ -1234,11 +1253,54 @@ with pestañas[8]:
 
 # --- 6. Traduccion a Gleam --------------------------------------------------
 with pestañas[9]:
-    st.subheader("En qué se convierte cada token")
-    st.dataframe(
-        tabla[["#", "Lexema", "TokenType", "Gleam", "Directo"]],
-        use_container_width=True, hide_index=True, height=420,
+    st.subheader("Traducción orientada por la sintaxis (SDT) — salida en Gleam")
+    st.caption(
+        "Cuarta y última fase del compilador. Recorre el mismo CST del parser "
+        "aplicando una acción SDT por producción, y usa los tipos que resolvió "
+        "el análisis semántico para elegir el operador correcto de Gleam "
+        "(`+` para Int, `+.` para Float) e insertar las conversiones."
     )
+
+    if error_sdt:
+        st.error(error_sdt)
+    elif codigo_gleam:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Líneas generadas", len(codigo_gleam.splitlines()))
+        c2.metric("Funciones auxiliares", codigo_gleam.count("fn bucle_"))
+        c3.metric("Módulos importados", codigo_gleam.count("import "))
+        st.code(codigo_gleam, language="rust")
+        st.download_button(
+            "Descargar salida .gleam",
+            data=codigo_gleam,
+            file_name="salida.gleam",
+            mime="text/plain",
+        )
+
+        st.divider()
+        st.markdown("### ✨ Validación y optimización con IA (bonus, Modalidad C)")
+        st.caption(
+            "Capa adicional sobre el código ya generado: el modelo revisa si "
+            "es válido en Gleam y propone mejoras idiomáticas. El compilador "
+            "funciona completo sin ella."
+        )
+        if st.button("🤖 Validar y optimizar el código generado",
+                     key="btn_ia_sdt"):
+            with st.spinner("La IA está revisando el código Gleam generado..."):
+                st.markdown(validar_codigo_generado(
+                    codigo_gleam, codigo, api_key=api_key_activa))
+    else:
+        st.warning(
+            "No se generó código de salida. El enunciado de la entrega final "
+            "lo exige así: mientras haya errores léxicos, sintácticos o "
+            "semánticos, el compilador reporta los errores y no traduce. "
+            "Corrija los errores de las pestañas anteriores."
+        )
+
+    with st.expander("Tabla de correspondencia token a token"):
+        st.dataframe(
+            tabla[["#", "Lexema", "TokenType", "Gleam", "Directo"]],
+            use_container_width=True, hide_index=True, height=420,
+        )
 
 # --- 7. Codigo del analizador ----------------------------------------------
 with pestañas[10]:

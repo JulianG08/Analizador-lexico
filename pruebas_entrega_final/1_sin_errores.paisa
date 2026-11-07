@@ -1,0 +1,48 @@
+// ============================================================================
+//  CASO 1 de 3 — PROGRAMA SIN ERRORES
+//  El compilador recorre las cuatro fases y produce la salida completa en
+//  Gleam. Ejercita las tres construcciones que el lenguaje destino no tiene:
+//  los tres bucles, que se traducen a recursion de cola.
+// ============================================================================
+
+// Suma 1+2+...+n con un bucle de condicion al principio (pre-test).
+hagale_pues sumatoria(numerito n) pa_que_lleve numerito dele_pues
+    pille_pues numerito acumulado = 0
+    pille_pues numerito i = 1
+    mientras_que i <= n dele_pues
+        pille_pues acumulado = acumulado + i
+        pille_pues i = i + 1
+    hasta_ahi
+    entregue_pues acumulado
+ya_quedo
+
+// Clasifica una nota. Condicional anidado con retorno en posicion de cola.
+hagale_pues clasificar(numerito nota) pa_que_lleve cuento dele_pues
+    si_acaso nota >= 45 y_tambien nota <= 50 entonces_pues
+        entregue_pues "Sobresaliente, mijo"
+    sino_pues
+        si_acaso nota >= 30 entonces_pues
+            entregue_pues "Pasaste raspando"
+        sino_pues
+            entregue_pues "Se quemo, parcero"
+        asi_quedo
+    asi_quedo
+ya_quedo
+
+// Programa principal
+pille_pues numerito total = sumatoria(10)
+hable_pues("La sumatoria de 1 a 10 es: " <> total)
+hable_pues(clasificar(47))
+
+// Bucle con contador y paso explicito (se traduce con recursion, porque
+// list.range de Gleam no admite incremento).
+pa_cada k desde 0 hasta 10 de_a 2 dele_pues
+    hable_pues("Par: " <> k)
+listo_pues
+
+// Bucle de condicion al final (post-test): corre al menos una vez.
+pille_pues numerito intentos = 0
+repita_pues
+    pille_pues intentos = intentos + 1
+    hable_pues("Intento numero " <> intentos)
+hasta_que intentos >= 3

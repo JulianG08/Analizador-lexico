@@ -1057,6 +1057,20 @@ class AnalizadorSemantico:
     #  Evaluación de expresiones: atributo sintetizado `type`
     # ------------------------------------------------------------------
     def _tipo_expr(self, nodo):
+        """Tipo sintetizado de una expresión, ANOTADO sobre el nodo del árbol.
+
+        La anotación (`nodo["tipo_sem"]`) es lo que la fase SDT lee después
+        para elegir la variante correcta del operador en Gleam: `+` para Int
+        y `+.` para Float, que son operadores distintos y no intercambiables.
+        Sin este atributo sintetizado el traductor no podría generar código
+        válido en el lenguaje destino.
+        """
+        tipo = self._tipo_expr_calc(nodo)
+        if isinstance(nodo, dict):
+            nodo["tipo_sem"] = tipo
+        return tipo
+
+    def _tipo_expr_calc(self, nodo):
         nombre = self._nombre(nodo)
 
         if nombre == "expresion":
