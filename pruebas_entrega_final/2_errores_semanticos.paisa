@@ -1,0 +1,45 @@
+// ============================================================================
+//  CASO 2 de 3 — ERRORES SEMANTICOS (NO debe generarse salida)
+//  El programa es lexica y sintacticamente valido: el lexer y el parser lo
+//  aceptan sin una sola queja. Lo que falla son las reglas semanticas, y el
+//  compilador debe reportarlas TODAS en una sola pasada y no emitir Gleam.
+// ============================================================================
+
+hagale_pues sumar(numerito a, numerito b) pa_que_lleve numerito dele_pues
+    entregue_pues a + b
+ya_quedo
+
+// SEM-1: se declara numerito pero la expresion es cuento.
+pille_pues numerito edad = "veinte anios"
+
+// SEM-3: Gleam no mezcla Int con Float de forma implicita.
+pille_pues quebradito precio = 19.99
+pille_pues numerito cantidad = 3
+pille_pues total = precio + cantidad
+
+// SEM-2: identificador que nunca fue declarado.
+hable_pues(saldo_disponible)
+
+// SEM-4: la condicion de control debe ser siono.
+si_acaso cantidad entonces_pues
+    hable_pues("hay unidades")
+asi_quedo
+
+// SEM-5: la funcion espera dos argumentos y recibe uno.
+pille_pues numerito resultado = sumar(5)
+
+// SEM-6: el cuerpo no redefine 'tope', el bucle no puede terminar.
+pille_pues numerito tope = 10
+mientras_que tope > 0 dele_pues
+    hable_pues("no avanza")
+hasta_ahi
+
+// SEM-7: la variable de control de un pa_cada es de solo lectura.
+pa_cada m desde 1 hasta 3 dele_pues
+    pille_pues m = 99
+listo_pues
+
+// SEM-8: paso positivo con desde > hasta, el cuerpo nunca se ejecuta.
+pa_cada j desde 10 hasta 1 dele_pues
+    hable_pues(j)
+listo_pues

@@ -1,5 +1,5 @@
 
-# Paisascript — Analizador Léxico y Gramática BNF
+# Paisascript — Compilador completo a Gleam
 
 
 **Paisascript** es un lenguaje de programación imperativo-estructurado cuyas
@@ -7,8 +7,20 @@ palabras reservadas provienen de la jerga paisa (Antioquia, Colombia). Es el
 **lenguaje fuente** de un compilador fuente-a-fuente cuyo **lenguaje destino es
 [Gleam](https://gleam.run)**.
 
-Este repositorio contiene la **Entrega 1** del curso de Teoría de Compiladores:
-la gramática libre de contexto en notación BNF y el analizador léxico.
+Este repositorio contiene el **proyecto completo** del curso de Teoría de
+Compiladores: las cuatro fases encadenadas, desde el texto fuente hasta el
+código Gleam generado.
+
+| # | Fase | Módulo | Qué produce |
+| :-- | :--- | :--- | :--- |
+| 1 | Análisis léxico | `lexer.py` | Tokens con lexema, fila y columna |
+| 2 | Análisis sintáctico | `parser.py` | El CST, con recuperación de errores |
+| 3 | Análisis semántico | `analizador_semantico.py` | Tabla de símbolos y 8 reglas (SEM-1…SEM-8) |
+| 4 | **Traducción (SDT)** | `traductor_sdt.py` | **Código Gleam válido** |
+
+El encadenamiento lo gobierna `compilador.py`, que aplica la regla dura del
+enunciado: **mientras haya un error léxico, sintáctico o semántico, no se
+genera código de salida**.
 
 🔗 **App en vivo:** [compiladorlex.streamlit.app](https://compiladorlex.streamlit.app/)
 
@@ -16,6 +28,7 @@ la gramática libre de contexto en notación BNF y el analizador léxico.
 
 ## Tabla de contenidos
 
+1. [Compilar un programa](#compilar-un-programa)
 1. [Ejecutar el analizador](#ejecutar-el-analizador)
 2. [Archivos del proyecto](#archivos-del-proyecto)
 3. [Diccionario de palabras reservadas](#diccionario-de-palabras-reservadas)
@@ -25,6 +38,116 @@ la gramática libre de contexto en notación BNF y el analizador léxico.
 7. [Arquitectura del lexer](#arquitectura-del-lexer)
 8. [Coherencia con Gleam](#coherencia-con-gleam)
 9. [Cumplimiento del enunciado](#cumplimiento-del-enunciado)
+
+---
+
+## Compilar un programa
+
+El compilador completo se usa desde la línea de comandos. No necesita
+dependencias externas: solo la biblioteca estándar de Python 3.8+.
+
+```bash
+python compilador.py pruebas_entrega_final/1_sin_errores.paisa
+```
+
+Opciones:
+
+```bash
+python compilador.py entrada.paisa -o salida.gleam   # escribe la salida en un archivo
+python compilador.py entrada.paisa --tabla           # muestra la tabla de símbolos
+```
+
+### Qué hace con cada tipo de entrada
+
+| Entrada | Comportamiento |
+| :--- | :--- |
+| Programa válido | Corre las cuatro fases y emite el código Gleam |
+| Con errores semánticos | Reporta todos con fase, fila, columna, lexema y mensaje. **No genera salida** |
+| Con errores sintácticos | Reporta con recuperación. No llega al análisis semántico ni genera salida |
+
+### Archivos de prueba obligatorios
+
+Están en [`pruebas_entrega_final/`](pruebas_entrega_final/):
+
+| Archivo | Contiene | Resultado |
+| :--- | :--- | :--- |
+| `1_sin_errores.paisa` | Programa válido con los tres bucles | Salida completa en Gleam |
+| `2_errores_semanticos.paisa` | 8 errores semánticos, uno por regla | 8 errores, sin salida |
+| `3_errores_sintacticos.paisa` | 5 errores sintácticos | 5 errores, sin salida |
+
+### Un ejemplo de la traducción
+
+**Entrada (Paisascript):**
+
+```
+hagale_pues sumatoria(numerito n) pa_que_lleve numerito dele_pues
+    pille_pues numerito acumulado = 0
+    pille_pues numerito i = 1
+    mientras_que i <= n dele_pues
+        pille_pues acumulado = acumulado + i
+        pille_pues i = i + 1
+    hasta_ahi
+    entregue_pues acumulado
+ya_quedo
+
+pille_pues numerito total = sumatoria(10)
+hable_pues("La sumatoria de 1 a 10 es: " <> total)
+```
+
+**Salida (Gleam):**
+
+```gleam
+import gleam/int
+import gleam/io
+
+pub fn main() {
+  let total = sumatoria(10)
+  io.println("La sumatoria de 1 a 10 es: " <> int.to_string(total))
+}
+
+pub fn sumatoria(n: Int) -> Int {
+  let acumulado = 0
+  let i = 1
+  let #(acumulado, i) = bucle_1(n, acumulado, i)
+  acumulado
+}
+
+fn bucle_1(n: Int, acumulado: Int, i: Int) -> #(Int, Int) {
+  case i <= n {
+    True -> {
+      let acumulado = acumulado + i
+      let i = i + 1
+      bucle_1(n, acumulado, i)
+    }
+    False -> #(acumulado, i)
+  }
+}
+```
+
+Tres decisiones de la fase SDT visibles en ese fragmento:
+
+- el `int.to_string` que exige la concatenación, porque en Gleam `<>` solo
+  acepta `String`;
+- el parámetro `n` que viaja a la función auxiliar, porque el bucle lo lee
+  aunque no lo modifique;
+- la tupla `#(acumulado, i)` con el estado del bucle, que reemplaza a la
+  mutación que Gleam no tiene.
+
+### Por qué los bucles se vuelven recursión
+
+Gleam no tiene `while`, `for`, `break` ni `continue`: solo `case` y recursión.
+Los tres bucles de Paisascript se traducen a **recursión de cola**, que el BEAM
+ejecuta en espacio constante.
+
+| Bucle | Traducción |
+| :--- | :--- |
+| `mientras_que` | Función auxiliar; el cuerpo va dentro de la rama `True` |
+| `pa_cada` | `list.range \|> list.each` con paso 1; recursión si el paso ≠ 1 |
+| `repita_pues` | Función auxiliar; el cuerpo va **antes** del `case` (post-test) |
+
+Y como Gleam tampoco tiene `return`, un `entregue_pues` anticipado se elimina
+reestructurando el flujo: lo que venía después del condicional pasa a su rama
+`False`.
 
 ---
 
@@ -116,7 +239,12 @@ Ambas interfaces ofrecen los mismos tres (requisito 11 del enunciado):
 | `gramatica_BNF_Paisascript.txt` | Gramática BNF completa: descripción informal, terminales por categoría, 54 reglas de producción sin recursividad izquierda, **verificación LL(1)**, ejemplos válidos e inválidos y justificación de coherencia con Gleam |
 | `lexer.py` | **Módulo reutilizable** del analizador léxico. No imprime ni lee nada |
 | `parser.py` | Analizador sintáctico descendente recursivo LL(1); construye el CST con posición en cada hoja |
-| `analizador_semantico.py` | **Fase semántica independiente**: visitor sobre el CST, tabla de símbolos por ámbitos y reglas SEM-1 a SEM-8 |
+| `analizador_semantico.py` | **Fase semántica**: visitor sobre el CST, tabla de símbolos por ámbitos y reglas SEM-1 a SEM-8 |
+| `traductor_sdt.py` | **Fase SDT**: recorre el CST aplicando las acciones de traducción y emite Gleam |
+| `compilador.py` | **Orquestador**: encadena las cuatro fases, reporte unificado de errores y CLI |
+| `reglas_sdt.py` | Especificación en prosa de las 13 reglas SDT (la renderiza el PDF) |
+| `generar_documento_final.py` | Genera el PDF entregable con la convención de tres colores |
+| `test_entrega_final.py` | Pruebas del compilador completo (6 casos) |
 | `app.py` | Interfaz web en Streamlit |
 | `main.py` | Interfaz de consola con colores ANSI |
 | `ejemplos.py` | Las trece cadenas predefinidas (incluye los tres bucles y los ejemplos semánticos) |

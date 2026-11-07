@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Paisascript — Gramática ampliada final</title>
+  <style>
+@page { size: A4; margin: 1.8cm 1.9cm 1.8cm 1.9cm; }
+/* Chromium descarta los fondos al imprimir si no se le pide lo contrario, y
+   los fondos de color son parte de la convencion que exige el enunciado. */
+* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "DejaVu Serif", Georgia, serif; font-size: 10pt;
+       color: #111111; line-height: 1.34; }
+h1 { font-size: 19pt; margin: 0 0 6px 0; color: #7A3E00; }
+h2 { font-size: 13.5pt; margin: 18px 0 8px 0; color: #7A3E00;
+     border-bottom: 1.4px solid #B8860B; padding-bottom: 3px; }
+p { margin: 4px 0; text-align: left; }
+.portada { text-align: center; padding-top: 4.2cm; page-break-after: always; }
+.portada .uni { font-size: 12pt; letter-spacing: .5px; }
+.portada .titulo { font-size: 24pt; margin: 18px 0 6px 0; color: #7A3E00; }
+.portada .sub { font-size: 12pt; color: #444; }
+.portada .meta { margin-top: 2.2cm; font-size: 10.5pt; }
+.gram { font-family: "DejaVu Sans Mono", "Courier New", monospace;
+        font-size: 8.6pt; color: #C00000; white-space: pre;
+        margin: 6px 0 6px 0; line-height: 1.18; page-break-inside: avoid; }
+.comentario { font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt;
+              color: #B05050; white-space: pre; margin: 4px 0; line-height: 1.18; }
+table.regla { border-collapse: collapse; width: 100%;
+              margin: 8px 0 14px 0; page-break-inside: avoid; }
+table.regla td.cuerpo_sem { background-color: #FFBF00; color: #000000;
+                            border: 1.6px solid #7A5A00; padding: 7px 9px; }
+table.regla td.cuerpo_sdt { background-color: #DCE9FB; color: #0B3D91;
+                            border: 1.6px solid #0B3D91; padding: 7px 9px; }
+td.cuerpo_sdt .regtitulo, td.cuerpo_sdt .regnodos, td.cuerpo_sdt td { color: #0B3D91; }
+.regtitulo { font-weight: bold; font-size: 11pt; margin: 0 0 3px 0; }
+.regnodos { font-size: 8.8pt; margin: 0 0 6px 0; }
+table.regtabla { border-collapse: collapse; width: 100%; }
+table.regtabla td { border: 1px solid #9A7200; padding: 3px 5px;
+                    vertical-align: top; font-size: 8.9pt; text-align: left; }
+td.cuerpo_sdt table.regtabla td { border: 1px solid #7FA6DD; }
+table.regtabla td.etq { font-weight: bold; width: 21%;
+                        background-color: #FFD97A; }
+td.cuerpo_sdt table.regtabla td.etq { background-color: #C3D9F5; }
+.leyenda { border: 1px solid #999; padding: 8px 10px; margin: 10px 0;
+           background: #FAFAFA; font-size: 9.2pt; }
+.leyenda .rojo { color: #C00000; font-family: "DejaVu Sans Mono", monospace; }
+.leyenda .ambar { background-color: #FFBF00; padding: 1px 4px; }
+.leyenda .azul { background-color: #DCE9FB; color: #0B3D91; padding: 1px 4px;
+                 font-weight: bold; }
+table.resumen { border-collapse: collapse; width: 100%; font-size: 8.8pt;
+                margin: 8px 0 14px 0; }
+table.resumen th, table.resumen td { border: 1px solid #999; padding: 4px 5px;
+                                     vertical-align: top; text-align: left; }
+table.resumen th { background: #F0E0B0; }
+table.resumen th.azul { background: #C3D9F5; color: #0B3D91; }
+.codigo { font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt;
+          background: #F4F4F4; border-left: 3px solid #B8860B;
+          padding: 7px 9px; white-space: pre-wrap; margin: 7px 0; }
+.gleam { font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt;
+         background: #F2F7FF; border-left: 3px solid #0B3D91;
+         padding: 7px 9px; white-space: pre-wrap; margin: 7px 0; color: #0B3D91; }
+.ia { border: 1.4px dashed #7A5A00; background: #FFF7E0; padding: 8px 10px;
+      font-size: 9.2pt; margin: 8px 0; }
+.salto { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<!-- ============================ PORTADA ============================ -->
+<div class="portada">
+  <div class="uni">Universidad Católica de Oriente · Facultad de Ingeniería</div>
+  <div class="uni">Compiladores — Entrega Final · Semestre 2-2026</div>
+  <div class="titulo">Paisascript</div>
+  <div class="sub">Gramática ampliada final<br>
+  Análisis léxico, sintáctico, semántico y traducción orientada por la sintaxis</div>
+  <div class="meta">
+    <p><b>Lenguaje fuente:</b> Paisascript</p>
+    <p><b>Lenguaje destino:</b> Gleam</p>
+    <p><b>Integrantes:</b> Andres Felipe Velez &middot;
+       Angie Amaya Fernandez &middot;
+       Julian David Guarnizo Castrillon</p>
+    <p><b>Repositorio:</b> github.com/JulianG08/Analizador-lexico</p>
+    <p><b>App en vivo:</b> compiladorlex.streamlit.app</p>
+    <p><b>Bonus:</b> Modalidad C — validación del código generado con IA
+       y sugerencias de optimización</p>
+  </div>
+</div>
+
+<!-- ============================ PARTE 1 ============================ -->
+<h1>1. Gramática ampliada final</h1>
+
+<p>Este documento presenta la gramática completa de Paisascript con las tres
+capas de anotación que el proyecto fue acumulando entrega tras entrega. Las
+<b>producciones sintácticas originales</b> van en
+<span class="rojo" style="color:#C00000">rojo</span> y son idénticas a las de
+las entregas anteriores. Las <b>reglas semánticas</b> van sobre
+<span class="ambar" style="background-color:#FFBF00">fondo ámbar</span>. Las
+<b>reglas de traducción orientada por la sintaxis</b> van en
+<span class="azul" style="background-color:#DCE9FB;color:#0B3D91">azul</span>.</p>
+
+<div class="leyenda">
+  <p><span class="rojo">&lt;produccion&gt; ::= ...</span> — regla original de la
+  gramática (producción sintáctica sin ampliar).</p>
+  <p><span class="ambar">REGLA SEM-x</span> — regla semántica: atributos,
+  dominio de valores y acciones de validación.</p>
+  <p><span class="azul">REGLA SDT-x</span> — regla de traducción: atributos,
+  acción de generación y la salida que produce en el lenguaje destino.</p>
+</div>
+
+<h2>1.1 Por qué la traducción necesita las otras dos capas</h2>
+
+<p>En Gleam <tt>Int</tt> y <tt>Float</tt> son tipos <b>disjuntos</b>, con
+operadores distintos: la suma de enteros es <tt>+</tt> y la de reales es
+<tt>+.</tt>. El operador de concatenación <tt>&lt;&gt;</tt> exige
+<tt>String</tt> en los dos lados. Eso significa que la fase SDT
+<b>no puede</b> decidir qué emitir mirando solo la forma de la expresión:
+necesita saber el tipo de cada operando.</p>
+
+<p>Ese tipo lo resolvió el análisis semántico y llega a la fase SDT por dos
+caminos: la <b>tabla de símbolos</b>, que el traductor recibe ya construida, y
+el atributo sintetizado <tt>type</tt>, que el analizador anotó sobre cada nodo
+de expresión del árbol. Las tres capas del documento no son tres documentos
+pegados: la azul se apoya en la ámbar, que se apoya en la roja.</p>
+
+<h2>1.2 Resumen de las reglas semánticas (fondo ámbar)</h2>
+
+    <table class="resumen">
+      <tr><th width="8%">Regla</th><th width="47%">Nodos de la gramática</th>
+          <th width="45%">Qué valida</th></tr>
+      <tr><td>SEM-1</td><td>&lt;sent_declaracion&gt;, &lt;tipo_opcional&gt;, &lt;expresion&gt;</td><td>Declaración de variable y compatibilidad de tipos</td></tr><tr><td>SEM-2</td><td>&lt;expr_primaria&gt; (IDENTIFICADOR), &lt;sent_lectura&gt;</td><td>Uso de identificadores: declaración previa y visibilidad</td></tr><tr><td>SEM-3</td><td>&lt;expr_aditiva&gt;, &lt;expr_multiplicativa&gt;, &lt;expr_potencia&gt;, &lt;expr_unaria&gt;, &lt;expr_relacional&gt;, &lt;expr_igualdad&gt;, &lt;expr_y&gt;, &lt;expr_o&gt;, &lt;expr_concat&gt;</td><td>Compatibilidad de operandos en operadores</td></tr><tr><td>SEM-4</td><td>&lt;sent_si&gt;, &lt;sent_mientras&gt;, &lt;sent_repita&gt;</td><td>Condición de control de tipo booleano</td></tr><tr><td>SEM-5</td><td>&lt;sent_llamada&gt;, &lt;sufijo_id&gt; dentro de &lt;expr_primaria&gt;, &lt;argumentos&gt;</td><td>Llamada a función: existencia, aridad y tipos</td></tr><tr><td>SEM-6</td><td>&lt;sent_mientras&gt;, &lt;sent_repita&gt;</td><td>Terminación del bucle: la condición tiene que poder cambiar</td></tr><tr><td>SEM-7</td><td>&lt;sent_para&gt;, y dentro de su &lt;bloque&gt;: &lt;sent_declaracion&gt;, &lt;sent_lectura&gt;, &lt;sent_asignacion&gt;</td><td>La variable de control del pa_cada es de solo lectura</td></tr><tr><td>SEM-8</td><td>&lt;sent_para&gt;, &lt;paso_opcional&gt;</td><td>Paso del pa_cada distinto de cero y recorrido alcanzable</td></tr>
+    </table>
+    
+
+<h2>1.3 Resumen de las reglas de traducción (azul)</h2>
+
+    <table class="resumen">
+      <tr><th class="azul" width="8%">Regla</th>
+          <th class="azul" width="47%">Producciones que cubre</th>
+          <th class="azul" width="45%">Qué genera</th></tr>
+      <tr><td>SDT-1</td><td>&lt;programa&gt;, &lt;lista_declaraciones&gt;, &lt;declaracion&gt;</td><td>Estructura del módulo de salida</td></tr><tr><td>SDT-2</td><td>&lt;def_funcion&gt;, &lt;parametros&gt;, &lt;param_lista&gt;, &lt;param_resto&gt;, &lt;tipo_retorno&gt;</td><td>Definición de función</td></tr><tr><td>SDT-3</td><td>&lt;sent_declaracion&gt;, &lt;tipo_opcional&gt;</td><td>Declaración de variable</td></tr><tr><td>SDT-4</td><td>&lt;sent_lectura&gt;</td><td>Lectura de consola, con conversión de tipo</td></tr><tr><td>SDT-5</td><td>&lt;sent_impresion&gt;</td><td>Impresión por consola</td></tr><tr><td>SDT-6</td><td>&lt;sent_si&gt;, &lt;rama_sino&gt;, &lt;sent_retornar&gt;</td><td>Condicional y reestructuración del retorno anticipado</td></tr><tr><td>SDT-7</td><td>&lt;sent_mientras&gt;</td><td>Bucle de condición al principio → recursión de cola</td></tr><tr><td>SDT-8</td><td>&lt;sent_para&gt;, &lt;paso_opcional&gt;</td><td>Bucle con contador → list.range o recursión</td></tr><tr><td>SDT-9</td><td>&lt;sent_repita&gt;</td><td>Bucle de condición al final → cuerpo antes del case</td></tr><tr><td>SDT-10</td><td>&lt;sent_pillemos&gt;, &lt;lista_casos&gt;, &lt;lista_casos_resto&gt;, &lt;caso&gt;, &lt;patron&gt;, &lt;cuerpo_caso&gt;</td><td>Calce de patrones</td></tr><tr><td>SDT-11</td><td>&lt;expr_aditiva&gt;, &lt;expr_multiplicativa&gt;, &lt;expr_potencia&gt;, &lt;expr_relacional&gt;, &lt;expr_igualdad&gt;, &lt;expr_concat&gt;, &lt;expr_y&gt;, &lt;expr_o&gt;, &lt;expr_unaria&gt;</td><td>Operadores: la elección depende del tipo</td></tr><tr><td>SDT-12</td><td>&lt;lista_declaraciones&gt;, &lt;lista_sentencias&gt;, &lt;param_resto&gt;, &lt;arg_resto&gt;, &lt;lista_casos_resto&gt;, &lt;rama_sino&gt;, &lt;paso_opcional&gt;, &lt;tipo_opcional&gt;, &lt;expr_o_p&gt; … &lt;expr_potencia_p&gt;</td><td>Listas vacías (ε) y producciones recursivas</td></tr><tr><td>SDT-13</td><td>&lt;sent_llamada&gt;, &lt;argumentos&gt;, &lt;arg_resto&gt;, &lt;sufijo_id&gt;, &lt;bloque&gt;</td><td>Llamada a función y cierre de bloque</td></tr>
+    </table>
+    
+
+<p>Las trece reglas SDT cubren todas las producciones que contribuyen a la
+salida. <b>SDT-12</b> atiende de forma explícita lo que el enunciado exige
+sobre las listas vacías (producciones ε) y las producciones recursivas, que en
+esta gramática aparecen en todas las listas y en las colas de expresión.</p>
+
+<!-- ============================ GRAMÁTICA ============================ -->
+<h1 class="salto">2. Producciones BNF con las reglas intercaladas</h1>
+
+<p>Se reproduce la sección de producciones de la gramática. Cada regla aparece
+inmediatamente después del nodo que restringe o traduce.</p>
+
+<div class="comentario">  Ordenadas de &lt;programa&gt; (arriba) a las expresiones atomicas (abajo).<br>  Sin recursividad por la izquierda y factorizadas por la izquierda.<br>  Los terminales literales van entre comillas o en minuscula sin &lt;&gt;.<br>  e denota la cadena vacia (epsilon).<br>================================================================================</div>
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.1  Programa y declaraciones                                    */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;programa&gt;              ::= &lt;lista_declaraciones&gt; $</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-1 — Estructura del módulo de salida</p>
+      <p class="regnodos">Nodos de la gramática: &lt;programa&gt;, &lt;lista_declaraciones&gt;, &lt;declaracion&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>modulos</b>: <i>sintetizado</i> acumulado en todo el recorrido. Conjunto de módulos de la biblioteca estándar de Gleam que las demás acciones SDT pidieron (<tt>gleam/io</tt>, <tt>gleam/int</tt>, …).<br><b>code(decl)</b>: <i>sintetizado</i> en cada &lt;declaracion&gt;.</td></tr><tr><td class="etq">Acción de traducción</td><td><tt>programa.code ← imports(modulos) ‖ funciones ‖ main</tt><br>1. Separar las &lt;declaracion&gt; en definiciones de función y sentencias de nivel superior.<br>2. Gleam no admite sentencias fuera de una función: las de nivel superior se envuelven en <tt>pub fn main() { … }</tt>.<br>3. Emitir los <tt>import</tt> al principio, ordenados, solo los que alguna acción haya pedido.<br>4. Añadir al final las funciones auxiliares generadas por los bucles.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>import gleam/io<br>import gleam/int<br><br>pub fn main() { … }<br><br>pub fn f(…) { … }<br><br>fn bucle_1(…) { … }</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;lista_declaraciones&gt;   ::= &lt;declaracion&gt; &lt;lista_declaraciones&gt;<br>                          | e</div>
+<div class="gram">&lt;declaracion&gt;           ::= &lt;def_funcion&gt;<br>                          | &lt;sentencia&gt;</div>
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.2  Definicion de funciones                                     */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;def_funcion&gt;           ::= hagale_pues IDENTIFICADOR<br>                            &quot;(&quot; &lt;parametros&gt; &quot;)&quot;<br>                            &lt;tipo_retorno&gt;<br>                            dele_pues<br>                                &lt;bloque&gt;<br>                            ya_quedo</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-2 — Definición de función</p>
+      <p class="regnodos">Nodos de la gramática: &lt;def_funcion&gt;, &lt;parametros&gt;, &lt;param_lista&gt;, &lt;param_resto&gt;, &lt;tipo_retorno&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>nombre</b>: <i>heredado</i> del token IDENTIFICADOR.<br><b>params</b>: <i>sintetizado</i> recorriendo &lt;param_lista&gt; y su cola recursiva &lt;param_resto&gt;. Lista de pares (nombre, tipo).<br><b>tipo_retorno</b>: <i>sintetizado</i> en &lt;tipo_retorno&gt;; vale ⊥ cuando la producción deriva en ε.<br><b>code(bloque)</b>: <i>sintetizado</i> en el cuerpo.</td></tr><tr><td class="etq">Acción de traducción</td><td><tt>code ← "pub fn " nombre "(" params ") -> " T " {" code(bloque) "}"</tt><br>1. Traducir cada tipo de Paisascript al de Gleam: numerito→Int, quebradito→Float, cuento→String, siono→Bool.<br>2. Si <b>tipo_retorno = ⊥</b> se omite la flecha y Gleam infiere el tipo.<br>3. Registrar los parámetros como variables vivas antes de traducir el cuerpo, y restaurar el entorno al salir.<br>4. Cerrar el cuerpo con una expresión (ver SDT-11).</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>hagale_pues f(numerito n) pa_que_lleve numerito dele_pues … ya_quedo</tt><br>se convierte en<br><tt>pub fn f(n: Int) -> Int { … }</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;tipo_retorno&gt;          ::= pa_que_lleve &lt;tipo&gt;<br>                          | e</div>
+<div class="gram">&lt;parametros&gt;            ::= &lt;param_lista&gt;<br>                          | e</div>
+<div class="gram">&lt;param_lista&gt;           ::= &lt;tipo&gt; IDENTIFICADOR &lt;param_resto&gt;</div>
+<div class="gram">&lt;param_resto&gt;           ::= &quot;,&quot; &lt;tipo&gt; IDENTIFICADOR &lt;param_resto&gt;<br>                          | e</div>
+<div class="gram">&lt;tipo&gt;                  ::= numerito<br>                          | quebradito<br>                          | cuento<br>                          | siono</div>
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.3  Bloques y sentencias                                        */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;bloque&gt;                ::= &lt;sentencia&gt; &lt;lista_sentencias&gt;</div>
+<div class="gram">&lt;lista_sentencias&gt;      ::= &lt;sentencia&gt; &lt;lista_sentencias&gt;<br>                          | e</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-12 — Listas vacías (ε) y producciones recursivas</p>
+      <p class="regnodos">Nodos de la gramática: &lt;lista_declaraciones&gt;, &lt;lista_sentencias&gt;, &lt;param_resto&gt;, &lt;arg_resto&gt;, &lt;lista_casos_resto&gt;, &lt;rama_sino&gt;, &lt;paso_opcional&gt;, &lt;tipo_opcional&gt;, &lt;expr_o_p&gt; … &lt;expr_potencia_p&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>code</b>: <i>sintetizado</i> en cada nodo de la lista.<br><b>heredado_izq</b>: en las colas de expresión (&lt;expr_X_p&gt;), el código y el tipo del operando izquierdo bajan como atributo <i>heredado</i>, porque la gramática está factorizada a la derecha para ser LL(1).</td></tr><tr><td class="etq">Acción de traducción</td><td>La gramática es recursiva por la derecha, así que cada lista tiene una producción vacía. Las reglas son uniformes:<br><b>Producción ε</b> → <tt>code ← ""</tt>. No emite nada. En &lt;rama_sino&gt; vacía la acción emite <tt>False -> Nil</tt>, porque un <tt>case</tt> de Gleam debe cubrir todos los casos. En &lt;paso_opcional&gt; vacío, <tt>paso ← 1</tt>. En &lt;tipo_opcional&gt; vacío el tipo se infiere de la expresión.<br><b>Producción recursiva</b> → <tt>code ← code(elemento) ‖ code(resto)</tt>: se concatena el elemento con el resultado de la cola, separando con salto de línea las sentencias y con coma los parámetros y argumentos.<br><b>Colas de expresión</b> → <tt>A' ::= op B A'</tt> se resuelve pasando el resultado parcial hacia la derecha como atributo heredado, de modo que <tt>a - b - c</tt> se asocie a la izquierda, como corresponde.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>&lt;lista_sentencias&gt; ::= ε</tt> → no emite nada.<br><tt>&lt;rama_sino&gt; ::= ε</tt> → <tt>False -> Nil</tt><br><tt>&lt;paso_opcional&gt; ::= ε</tt> → paso 1 → <tt>list.range(a, b)</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;sentencia&gt;             ::= &lt;sent_declaracion&gt;<br>                          | &lt;sent_lectura&gt;<br>                          | &lt;sent_impresion&gt;<br>                          | &lt;sent_si&gt;<br>                          | &lt;sent_mientras&gt;<br>                          | &lt;sent_para&gt;<br>                          | &lt;sent_repita&gt;<br>                          | &lt;sent_pillemos&gt;<br>                          | &lt;sent_retornar&gt;<br>                          | &lt;sent_llamada&gt;</div>
+<div class="gram">/* Declaracion / asignacion. El tipo es opcional (se infiere).       */<br>&lt;sent_declaracion&gt;      ::= pille_pues &lt;tipo_opcional&gt; IDENTIFICADOR<br>                            &quot;=&quot; &lt;expresion&gt;</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-1 — Declaración de variable y compatibilidad de tipos</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_declaracion&gt;, &lt;tipo_opcional&gt;, &lt;expresion&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>tipo_declarado</b>: <i>heredado</i> desde &lt;tipo_opcional&gt;. Dominio: {numerito, quebradito, cuento, siono} ∪ {⊥}, donde ⊥ = sin anotación.<br><b>type(expr)</b>: <i>sintetizado</i> en &lt;expresion&gt;. Dominio: {numerito, quebradito, cuento, siono} ∪ {error}.<br><b>tipo_simbolo</b>: <i>sintetizado</i> en &lt;sent_declaracion&gt;. Es el tipo con el que el identificador entra a la tabla de símbolos.</td></tr><tr><td class="etq">Restricción</td><td>Si <b>tipo_declarado ≠ ⊥</b>, entonces <b>type(expr) = tipo_declarado</b>.<br>Si <b>tipo_declarado = ⊥</b>, se infiere <b>tipo_simbolo = type(expr)</b> (como el <i>let</i> de Gleam).</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Calcular type(expr) recorriendo la expresión (atributo sintetizado).<br>2. Comparar con tipo_declarado. Si difieren, reportar error con <b>fila, columna, lexema</b> y mensaje descriptivo.<br>3. Insertar el símbolo en el <b>ámbito actual</b> con su tipo, estado de inicialización = verdadero y posición de declaración.<br>4. El shadowing (redeclaración en el mismo ámbito) es válido: crea un enlace nuevo, no modifica el anterior.<br>5. Continuar el análisis (recuperación).</td></tr></table>
+    </td></tr></table>
+    
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-3 — Declaración de variable</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_declaracion&gt;, &lt;tipo_opcional&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>id.lexema</b>: <i>heredado</i> del token.<br><b>code(expr)</b> y <b>type(expr)</b>: <i>sintetizados</i> en la expresión; el tipo lo resolvió el análisis semántico y queda anotado en el nodo.<br><b>entorno</b>: <i>heredado</i>; la tabla de tipos vivos que la fase SDT va alimentando.</td></tr><tr><td class="etq">Acción de traducción</td><td><tt>code ← "let " id.lexema " = " code(expr)</tt><br>1. Emitir el enlace con <tt>let</tt>.<br>2. Registrar <tt>entorno[id] ← type(expr)</tt>, porque las acciones posteriores necesitan ese tipo para elegir operadores.<br>3. La redeclaración del mismo nombre es válida: en Gleam <tt>let</tt> crea un enlace nuevo (shadowing), que es justo la semántica de Paisascript.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>pille_pues numerito x = 5</tt> &nbsp;→&nbsp; <tt>let x = 5</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;tipo_opcional&gt;         ::= &lt;tipo&gt;<br>                          | e</div>
+<div class="gram">&lt;sent_lectura&gt;          ::= escuche_pues &quot;(&quot; IDENTIFICADOR &quot;)&quot;</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-2 — Uso de identificadores: declaración previa y visibilidad</p>
+      <p class="regnodos">Nodos de la gramática: &lt;expr_primaria&gt; (IDENTIFICADOR), &lt;sent_lectura&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>id.lexema</b>: <i>heredado</i> del token IDENTIFICADOR.<br><b>id.type</b>: <i>sintetizado</i> desde la tabla de símbolos. Dominio: {numerito, quebradito, cuento, siono, desconocido} ∪ {error}.<br><b>id.declarado</b>: <i>sintetizado</i>. Dominio: {verdadero, falso}.</td></tr><tr><td class="etq">Restricción</td><td><b>id.declarado = verdadero</b>: todo identificador usado en una expresión debe existir en el ámbito actual o en alguno de sus ancestros (alcance léxico anidado).<br><b>escuche_pues(id)</b> declara el identificador si no existe y lo marca como inicializado.</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Recorrer la pila de ámbitos de dentro hacia afuera buscando el lexema (resolución de nombres).<br>2. Si no aparece, reportar «identificador no declarado» con fila, columna y lexema.<br>3. Si aparece, sintetizar id.type con el tipo del símbolo; si es una función usada sin paréntesis, reportarlo.<br>4. En &lt;sent_lectura&gt;, declarar/inicializar el identificador y continuar.</td></tr></table>
+    </td></tr></table>
+    
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-4 — Lectura de consola, con conversión de tipo</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_lectura&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>id.lexema</b>: <i>heredado</i>.<br><b>id.type</b>: consultado en la <b>tabla de símbolos</b> que construyó el análisis semántico.</td></tr><tr><td class="etq">Acción de traducción</td><td><tt>code ← "let assert Ok(" id ") = erlang.get_line(\"\")"</tt><br>1. Pedir el módulo <tt>gleam/erlang</tt>.<br>2. La consola entrega <b>String</b>. Si la tabla de símbolos dice que la variable es numerito o quebradito, añadir la conversión, porque Gleam no convierte de forma implícita:<br><tt>let assert Ok(x) = int.parse(string.trim(x))</tt><br>3. Si el tipo es desconocido, la variable queda como cuento.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>escuche_pues(edad)</tt> con <tt>edad: numerito</tt> →<br><tt>let assert Ok(edad) = erlang.get_line("")<br>let assert Ok(edad) = int.parse(string.trim(edad))</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;sent_impresion&gt;        ::= hable_pues &quot;(&quot; &lt;expresion&gt; &quot;)&quot;</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-5 — Impresión por consola</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_impresion&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>code(expr)</b> y <b>type(expr)</b>: <i>sintetizados</i>.</td></tr><tr><td class="etq">Acción de traducción</td><td><tt>code ← "io.println(" aCadena(code(expr), type(expr)) ")"</tt><br>La función auxiliar <tt>aCadena</tt> es la misma de SDT-9: <tt>io.println</tt> solo acepta String, así que un numerito pasa por <tt>int.to_string</tt>, un quebradito por <tt>float.to_string</tt> y un siono por <tt>bool.to_string</tt>.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>hable_pues(total)</tt> con total numerito →<br><tt>io.println(int.to_string(total))</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;sent_retornar&gt;         ::= entregue_pues &lt;expresion&gt;</div>
+<div class="gram">/* Llamada a funcion usada como sentencia (se descarta su valor).    */<br>&lt;sent_llamada&gt;          ::= IDENTIFICADOR &quot;(&quot; &lt;argumentos&gt; &quot;)&quot;</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-13 — Llamada a función y cierre de bloque</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_llamada&gt;, &lt;argumentos&gt;, &lt;arg_resto&gt;, &lt;sufijo_id&gt;, &lt;bloque&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>nombre</b>: <i>heredado</i>.<br><b>args</b>: <i>sintetizado</i> recorriendo la cola &lt;arg_resto&gt;.<br><b>ultima</b>: <i>sintetizado</i> en &lt;bloque&gt;; indica si la última línea del bloque es una expresión o un enlace.</td></tr><tr><td class="etq">Acción de traducción</td><td><tt>code ← nombre "(" args ")"</tt>, con los argumentos separados por coma. Una llamada vale igual como sentencia que como expresión, porque en Gleam todo es expresión.<br><b>Cierre de bloque</b>: en Gleam todo bloque DEVUELVE un valor, así que no puede terminar en <tt>let</tt>. Si la última línea traducida es un enlace, la acción añade <tt>Nil</tt>, que es el valor unitario. Sin esto el código generado no compilaría.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>sumar(1, 2)</tt> &nbsp;→&nbsp; <tt>sumar(1, 2)</tt><br>un bloque que termina en <tt>let x = 5</tt> recibe una línea <tt>Nil</tt> al final.</td></tr></table>
+    </td></tr></table>
+    
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.4  Condicional  (sin recursividad izquierda)                   */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;sent_si&gt;               ::= si_acaso &lt;expresion&gt; entonces_pues<br>                                &lt;bloque&gt;<br>                            &lt;rama_sino&gt;<br>                            asi_quedo</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-6 — Condicional y reestructuración del retorno anticipado</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_si&gt;, &lt;rama_sino&gt;, &lt;sent_retornar&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>code(cond)</b>, <b>code(entonces)</b>, <b>code(sino)</b>: <i>sintetizados</i>.<br><b>continuacion</b>: <i>heredado</i>. Es la lista de sentencias que vienen DESPUÉS del condicional. Es el atributo que hace posible eliminar el retorno anticipado.</td></tr><tr><td class="etq">Acción de traducción</td><td>Caso general:<br><tt>code ← "case " code(cond) " { True -> {" entonces "} False -> {" sino "} }"</tt><br>Caso del <b>retorno anticipado</b> (un <tt>si_acaso</tt> sin <tt>sino_pues</tt> cuyo cuerpo termina en <tt>entregue_pues</tt>): Gleam no tiene <tt>return</tt>, así que la rama False recibe la <b>continuación</b> completa.<br>Sin esta transformación las dos ramas del <tt>case</tt> tendrían tipos distintos y el código no compilaría.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>si_acaso n &lt; 2 entonces_pues entregue_pues naranjas asi_quedo<br>… resto … </tt><br>se convierte en<br><tt>case n &lt; 2 {<br>&nbsp;&nbsp;True -> { False }<br>&nbsp;&nbsp;False -> { … resto … }<br>}</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;rama_sino&gt;             ::= sino_pues &lt;bloque&gt;<br>                          | e</div>
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.5  Repeticion por condicion  (while)                           */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;sent_mientras&gt;         ::= mientras_que &lt;expresion&gt; dele_pues<br>                                &lt;bloque&gt;<br>                            hasta_ahi</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-4 — Condición de control de tipo booleano</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_si&gt;, &lt;sent_mientras&gt;, &lt;sent_repita&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>type(cond)</b>: <i>sintetizado</i> en la expresión de control. Dominio: tipos del lenguaje ∪ {desconocido, error}.<br><b>cond_esperado</b>: <i>heredado</i> desde la construcción. Dominio: {siono}.</td></tr><tr><td class="etq">Restricción</td><td><b>type(cond) = siono</b> en <b>si_acaso</b>, en <b>mientras_que</b> y en el <b>hasta_que</b> de <b>repita_pues</b>. Una condición numerito, cuento o quebradito no es válida.<br>En <b>repita_pues</b> la condición se evalúa en el ámbito del cuerpo, así que puede leer las variables que el cuerpo creó.</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Evaluar el tipo sintetizado de la condición.<br>2. Compararlo con siono.<br>3. Si no coincide, reportar «la condición debe ser siono» con fila, columna y lexema.<br>4. Analizar igualmente ambos bloques (recuperación).</td></tr></table>
+    </td></tr></table>
+    
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-7 — Bucle de condición al principio → recursión de cola</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_mientras&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>estado</b>: <i>sintetizado</i> del cuerpo. Variables que el cuerpo vuelve a enlazar Y que ya existían fuera: son las únicas que cambian de una vuelta a otra.<br><b>libres</b>: <i>sintetizado</i>. Variables que el bucle solo LEE y vienen de fuera.<br><b>tipos</b>: de la <b>tabla de símbolos</b>, para anotar la firma.<br><b>continuacion</b>: <i>heredado</i> (ver SDT-6).</td></tr><tr><td class="etq">Acción de traducción</td><td>Gleam no tiene <tt>while</tt>: se genera una función auxiliar recursiva de cola, que el BEAM ejecuta en espacio constante.<br>1. Calcular <b>estado</b> y <b>libres</b>. Los dos entran como parámetros; solo el estado se devuelve.<br>2. Emitir <tt>fn bucle_k(libres, estado) -> T { case cond { True -> { cuerpo; bucle_k(…) } False -> estado } }</tt>.<br>3. En el punto de la llamada: <tt>let estado = bucle_k(libres, estado)</tt>.<br>4. Si el cuerpo contiene un <tt>entregue_pues</tt>, la rama False recibe la continuación y la auxiliar devuelve el valor de la función que la contiene.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>mientras_que i &lt;= n dele_pues … hasta_ahi</tt> →<br><tt>fn bucle_1(n: Int, acumulado: Int, i: Int) -> #(Int, Int) {<br>&nbsp;&nbsp;case i &lt;= n {<br>&nbsp;&nbsp;&nbsp;&nbsp;True -> { … bucle_1(n, acumulado, i) }<br>&nbsp;&nbsp;&nbsp;&nbsp;False -> #(acumulado, i)<br>&nbsp;&nbsp;}<br>}</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.6  Repeticion con variable de control  (for)                   */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;sent_para&gt;             ::= pa_cada IDENTIFICADOR<br>                            desde &lt;expresion&gt;<br>                            hasta &lt;expresion&gt;<br>                            &lt;paso_opcional&gt;<br>                            dele_pues<br>                                &lt;bloque&gt;<br>                            listo_pues</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-7 — La variable de control del pa_cada es de solo lectura</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_para&gt;, y dentro de su &lt;bloque&gt;: &lt;sent_declaracion&gt;, &lt;sent_lectura&gt;, &lt;sent_asignacion&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>var_control.lexema</b>: <i>heredado</i> del IDENTIFICADOR que sigue a <tt>pa_cada</tt>.<br><b>var_control.escribible</b>: <i>heredado</i> hacia el ámbito del bucle. Dominio: {verdadero, falso}; vale <b>falso</b> para la variable de control y verdadero para cualquier otra.<br><b>var_control.categoria</b>: <i>sintetizado</i> al declararla. Dominio: {bucle}.<br><b>var_control.type</b>: <i>sintetizado</i> = numerito.</td></tr><tr><td class="etq">Restricción</td><td>Ninguna sentencia del cuerpo puede volver a enlazar la variable de control: ni <tt>pille_pues i = …</tt>, ni <tt>escuche_pues(i)</tt>, ni <tt>i = …</tt>.<br>El atributo se consulta antes de cada redefinición: solo se admite si <b>escribible = verdadero</b>.<br>Fuera del bucle el nombre vuelve a estar libre, porque el ámbito del <tt>pa_cada</tt> se cierra al terminar.</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Al entrar al <tt>pa_cada</tt>, abrir un ámbito nuevo e insertar la variable de control con categoría = bucle, tipo = numerito, inicializada = verdadero y <b>escribible = falso</b>.<br>2. En cada <tt>pille_pues</tt> y cada <tt>escuche_pues</tt> del cuerpo, buscar el nombre en la pila de ámbitos y leer su atributo escribible.<br>3. Si es falso, reportar error con fila, columna y lexema, y sugerir otro nombre para la variable nueva.<br>4. Cerrar el ámbito al salir del bucle y continuar.<br><i>Por qué importa para Gleam:</i> la variable de control se vuelve el parámetro de <tt>fn(i) { … }</tt> dentro de <tt>list.each</tt>; reenlazarla rompería el recorrido.</td></tr></table>
+    </td></tr></table>
+    
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-8 — Bucle con contador → list.range o recursión</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_para&gt;, &lt;paso_opcional&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>var</b>: <i>heredado</i>, la variable de control.<br><b>code(desde)</b>, <b>code(hasta)</b>: <i>sintetizados</i>.<br><b>paso</b>: <i>sintetizado</i> de &lt;paso_opcional&gt;; vale 1 cuando la producción deriva en ε (ver SDT-12).</td></tr><tr><td class="etq">Acción de traducción</td><td>Hay dos caminos, y la elección depende del paso:<br><b>paso = 1</b> → la forma idiomática de Gleam:<br><tt>list.range(desde, hasta) |&gt; list.each(fn(var) { cuerpo })</tt><br>Pide el módulo <tt>gleam/list</tt>.<br><b>paso ≠ 1</b> → <tt>list.range</tt> de Gleam NO admite incremento, así que se genera recursión de cola con la comparación orientada según el signo del paso (<tt>&lt;=</tt> si avanza, <tt>&gt;=</tt> si retrocede).</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>pa_cada k desde 0 hasta 10 de_a 2 dele_pues … listo_pues</tt> →<br><tt>fn bucle_2(k: Int) -> Nil {<br>&nbsp;&nbsp;case k &lt;= 10 {<br>&nbsp;&nbsp;&nbsp;&nbsp;True -> { … bucle_2(k + 2) }<br>&nbsp;&nbsp;&nbsp;&nbsp;False -> Nil<br>&nbsp;&nbsp;}<br>}</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;paso_opcional&gt;         ::= de_a &lt;expresion&gt;<br>                          | e</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-8 — Paso del pa_cada distinto de cero y recorrido alcanzable</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_para&gt;, &lt;paso_opcional&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>valor(desde)</b>, <b>valor(hasta)</b>, <b>valor(paso)</b>: <i>sintetizados</i> por plegado de constantes sobre cada &lt;expresion&gt;. Dominio: ℤ ∪ {⊥}, donde ⊥ significa «no es un literal» (admite el menos unario y los paréntesis).<br><b>paso_implicito</b>: <i>heredado</i>; vale 1 cuando &lt;paso_opcional&gt; deriva en ε.<br><b>direccion</b>: <i>sintetizado</i> en &lt;sent_para&gt; = signo(valor(paso)). Dominio: {+1, −1}.</td></tr><tr><td class="etq">Restricción</td><td><b>valor(paso) ≠ 0</b>: con paso 0 la variable de control nunca avanza.<br>Si <b>valor(paso) &gt; 0</b> entonces <b>valor(desde) ≤ valor(hasta)</b>.<br>Si <b>valor(paso) &lt; 0</b> entonces <b>valor(desde) ≥ valor(hasta)</b>.<br>Las dos últimas solo se exigen cuando los tres valores son literales: con límites variables el recorrido no es decidible en tiempo de compilación y la regla calla en lugar de dar un falso positivo.</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Plegar las tres expresiones a su valor constante; si &lt;paso_opcional&gt; es ε, usar paso_implicito = 1.<br>2. Si valor(paso) = 0, reportar error sobre el lexema del paso con fila y columna.<br>3. Si los tres son literales, comparar el signo del paso con el orden de los límites y reportar «el cuerpo nunca se ejecuta» indicando los tres valores concretos.<br>4. Si alguno no es literal, no reportar nada y seguir.<br>5. Continuar con el cuerpo del bucle.<br><i>Por qué importa para Gleam:</i> <tt>list.range</tt> no admite paso, así que con paso ≠ 1 el generador emite recursión de cola; un paso 0 produciría una recursión infinita.</td></tr></table>
+    </td></tr></table>
+    
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.7  Repeticion con condicion al final  (do-while / repeat-until)*/<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;sent_repita&gt;           ::= repita_pues<br>                                &lt;bloque&gt;<br>                            hasta_que &lt;expresion&gt;</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-6 — Terminación del bucle: la condición tiene que poder cambiar</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_mientras&gt;, &lt;sent_repita&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>leidas(cond)</b>: <i>sintetizado</i> en la expresión de control. Dominio: conjunto de identificadores que la condición consulta (sin los nombres de función).<br><b>redefinidas(cuerpo)</b>: <i>sintetizado</i> en &lt;bloque&gt;. Dominio: conjunto de identificadores que el cuerpo vuelve a enlazar con <tt>pille_pues</tt> o <tt>escuche_pues</tt>.<br><b>valor(cond)</b>: <i>sintetizado</i> por plegado de constantes. Dominio: {sizas, naranjas} ∪ {⊥} (⊥ = no constante).<br><b>continua_si</b>: <i>heredado</i> de la construcción. Dominio: {verdadero} para <tt>mientras_que</tt>, {falso} para <tt>repita_pues</tt>, porque <tt>hasta_que</tt> es la condición de SALIDA, no de permanencia.</td></tr><tr><td class="etq">Restricción</td><td><b>valor(cond) ≠ continua_si</b>: la condición no puede ser el literal que mantiene el bucle vivo (<tt>mientras_que sizas</tt> o <tt>hasta_que naranjas</tt>).<br><b>leidas(cond) ≠ ∅</b>: una condición sin variables tiene siempre el mismo valor.<br><b>leidas(cond) ∩ redefinidas(cuerpo) ≠ ∅</b>: el cuerpo debe redefinir al menos una de las variables que la condición lee.<br>La regla es <i>conservadora y sólida en este lenguaje</i>: Paisascript es inmutable y sin efectos laterales, así que si esa intersección es vacía ninguna ejecución puede cambiar el valor de la condición.</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Plegar la condición: si es un literal booleano, compararlo con continua_si y reportar «el bucle nunca termina».<br>2. Recorrer la condición y recolectar leidas(cond), descartando los identificadores que la tabla de símbolos marca como función.<br>3. Recorrer el cuerpo (incluidos los bucles anidados) y recolectar redefinidas(cuerpo) a partir de los nodos &lt;sent_declaracion&gt;, &lt;sent_lectura&gt; y &lt;sent_asignacion&gt;.<br>4. Intersecar ambos conjuntos. Si el resultado es vacío, reportar error con fila, columna y lexema del bucle, nombrando las variables de la condición que habría que hacer avanzar.<br>5. Continuar el análisis del resto del programa.<br><i>Por qué importa para Gleam:</i> ese bucle se traduce a una recursión de cola; sin progreso, la función auxiliar nunca alcanza su caso base.</td></tr></table>
+    </td></tr></table>
+    
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-9 — Bucle de condición al final → cuerpo antes del case</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_repita&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td>Los mismos de SDT-7: <b>estado</b>, <b>libres</b>, <b>continuacion</b>.<br><b>sentido</b>: <i>heredado</i> de la construcción. En <tt>repita_pues</tt> la condición es de SALIDA, no de permanencia.</td></tr><tr><td class="etq">Acción de traducción</td><td>Es la misma recursión de cola de SDT-7 con dos diferencias, y las dos vienen de la semántica post-test:<br>1. El cuerpo se emite <b>ANTES</b> del <tt>case</tt>, no dentro de una de sus ramas. Eso es lo que hace que corra al menos una vez.<br>2. Las ramas se invierten: <tt>True</tt> (se cumplió <tt>hasta_que</tt>) devuelve el estado y es el caso base; <tt>False</tt> vuelve a llamar.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>repita_pues … hasta_que v &gt;= 3</tt> →<br><tt>fn bucle_3(v: Int) -> Int {<br>&nbsp;&nbsp;… cuerpo …<br>&nbsp;&nbsp;case v &gt;= 3 {<br>&nbsp;&nbsp;&nbsp;&nbsp;True -> v<br>&nbsp;&nbsp;&nbsp;&nbsp;False -> bucle_3(v)<br>&nbsp;&nbsp;}<br>}</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="comentario">/* El cuerpo se ejecuta AL MENOS UNA VEZ y hasta_que da la condicion de  */<br>/* SALIDA (no de permanencia): el bucle repite mientras la expresion sea */<br>/* falsa. hasta_que cierra el bloque, de modo que no hace falta una      */<br>/* palabra de cierre adicional. La condicion se evalua DENTRO del ambito */<br>/* del cuerpo, asi que puede leer las variables que el cuerpo acaba de   */<br>/* crear: es el mismo estado que el generador pasa a la recursion de     */<br>/* cola de Gleam.                                                       */</div>
+<div class="comentario">/* ---------------------------------------------------------------- */<br>/* 3.8  Calce de patrones  (equivale al `case` de Gleam)            */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;sent_pillemos&gt;         ::= pillemos &lt;expresion&gt; &quot;{&quot; &lt;lista_casos&gt; &quot;}&quot;</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-10 — Calce de patrones</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_pillemos&gt;, &lt;lista_casos&gt;, &lt;lista_casos_resto&gt;, &lt;caso&gt;, &lt;patron&gt;, &lt;cuerpo_caso&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>code(sujeto)</b>: <i>sintetizado</i>.<br><b>code(patron)</b>: <i>sintetizado</i> en cada &lt;patron&gt;.<br><b>casos</b>: <i>sintetizado</i> recorriendo la cola recursiva &lt;lista_casos_resto&gt; (ver SDT-12).</td></tr><tr><td class="etq">Acción de traducción</td><td><tt>code ← "case " code(sujeto) " { " casos " }"</tt><br>Es la traducción más directa del lenguaje, porque <tt>pillemos</tt> se diseñó contra el <tt>case</tt> de Gleam.<br>Conversión de patrones: <tt>sizas</tt>→<tt>True</tt>, <tt>naranjas</tt>→<tt>False</tt>, <tt>_</tt>→<tt>_</tt>, y los literales reales reciben punto decimal explícito.<br>Un cuerpo de una sola línea va en la misma línea del patrón; uno de varias va entre llaves.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>pillemos x { 10 pa_que_lleve hable_pues("diez") }</tt> →<br><tt>case x { 10 -> io.println("diez") }</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">&lt;lista_casos&gt;           ::= &lt;caso&gt; &lt;lista_casos_resto&gt;</div>
+<div class="gram">&lt;lista_casos_resto&gt;     ::= &lt;caso&gt; &lt;lista_casos_resto&gt;<br>                          | e</div>
+<div class="gram">&lt;caso&gt;                  ::= &lt;patron&gt; pa_que_lleve &lt;cuerpo_caso&gt;</div>
+<div class="gram">&lt;cuerpo_caso&gt;           ::= &quot;{&quot; &lt;bloque&gt; &quot;}&quot;<br>                          | &lt;sentencia&gt;</div>
+<div class="gram">&lt;patron&gt;                ::= NUM_ENTERO<br>                          | NUM_REAL<br>                          | CADENA_LITERAL<br>                          | sizas<br>                          | naranjas<br>                          | IDENTIFICADOR      /* enlaza el valor (catch-all) */<br>                          | &quot;_&quot;                /* comodin, descarta el valor  */</div>
+<div class="gram">/* ---------------------------------------------------------------- */<br>/* 3.9  Expresiones                                                 */<br>/*      Jerarquia de precedencia, de menor a mayor:                 */<br>/*        o_que &lt; y_tambien &lt; igualdad &lt; relacional &lt; &lt;&gt;            */<br>/*              &lt; +,- &lt; *,/,% &lt; ** &lt; unarios &lt; primaria             */<br>/*      Toda recursividad izquierda fue eliminada con la tecnica    */<br>/*      A ::= B A&#x27;   /   A&#x27; ::= op B A&#x27; | e                         */<br>/* ---------------------------------------------------------------- */</div>
+<div class="gram">&lt;expresion&gt;             ::= &lt;expr_o&gt;</div>
+<div class="gram">&lt;expr_o&gt;                ::= &lt;expr_y&gt; &lt;expr_o_p&gt;<br>&lt;expr_o_p&gt;              ::= o_que &lt;expr_y&gt; &lt;expr_o_p&gt;<br>                          | e</div>
+<div class="gram">&lt;expr_y&gt;                ::= &lt;expr_igualdad&gt; &lt;expr_y_p&gt;<br>&lt;expr_y_p&gt;              ::= y_tambien &lt;expr_igualdad&gt; &lt;expr_y_p&gt;<br>                          | e</div>
+<div class="gram">&lt;expr_igualdad&gt;         ::= &lt;expr_relacional&gt; &lt;expr_igualdad_p&gt;<br>&lt;expr_igualdad_p&gt;       ::= &lt;op_igualdad&gt; &lt;expr_relacional&gt; &lt;expr_igualdad_p&gt;<br>                          | e<br>&lt;op_igualdad&gt;           ::= igualito<br>                          | distinto</div>
+<div class="gram">&lt;expr_relacional&gt;       ::= &lt;expr_concat&gt; &lt;expr_relacional_p&gt;<br>&lt;expr_relacional_p&gt;     ::= &lt;op_relacional&gt; &lt;expr_concat&gt; &lt;expr_relacional_p&gt;<br>                          | e<br>&lt;op_relacional&gt;         ::= &quot;&gt;&quot;<br>                          | &quot;&lt;&quot;<br>                          | &quot;&gt;=&quot;<br>                          | &quot;&lt;=&quot;</div>
+<div class="gram">&lt;expr_concat&gt;           ::= &lt;expr_aditiva&gt; &lt;expr_concat_p&gt;<br>&lt;expr_concat_p&gt;         ::= &quot;&lt;&gt;&quot; &lt;expr_aditiva&gt; &lt;expr_concat_p&gt;<br>                          | e</div>
+<div class="gram">&lt;expr_aditiva&gt;          ::= &lt;expr_multiplicativa&gt; &lt;expr_aditiva_p&gt;<br>&lt;expr_aditiva_p&gt;        ::= &quot;+&quot; &lt;expr_multiplicativa&gt; &lt;expr_aditiva_p&gt;<br>                          | &quot;-&quot; &lt;expr_multiplicativa&gt; &lt;expr_aditiva_p&gt;<br>                          | e</div>
+<div class="gram">&lt;expr_multiplicativa&gt;   ::= &lt;expr_potencia&gt; &lt;expr_multiplicativa_p&gt;<br>&lt;expr_multiplicativa_p&gt; ::= &quot;*&quot; &lt;expr_potencia&gt; &lt;expr_multiplicativa_p&gt;<br>                          | &quot;/&quot; &lt;expr_potencia&gt; &lt;expr_multiplicativa_p&gt;<br>                          | &quot;%&quot; &lt;expr_potencia&gt; &lt;expr_multiplicativa_p&gt;<br>                          | e</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-3 — Compatibilidad de operandos en operadores</p>
+      <p class="regnodos">Nodos de la gramática: &lt;expr_aditiva&gt;, &lt;expr_multiplicativa&gt;, &lt;expr_potencia&gt;, &lt;expr_unaria&gt;, &lt;expr_relacional&gt;, &lt;expr_igualdad&gt;, &lt;expr_y&gt;, &lt;expr_o&gt;, &lt;expr_concat&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>type_izq</b> y <b>type_der</b>: <i>sintetizados</i> en los dos operandos. Dominio: tipos del lenguaje ∪ {desconocido, error}.<br><b>type</b>: <i>sintetizado</i> en el nodo del operador (tipo del resultado).</td></tr><tr><td class="etq">Restricción</td><td><b>+ − * / **</b>: type_izq = type_der y ambos ∈ {numerito, quebradito}.<br><b>%</b>: type_izq = type_der = numerito.<br><b>&gt; &lt; &gt;= &lt;=</b>: operandos numéricos del mismo tipo; el resultado es siono.<br><b>y_tambien / o_que / nanai</b>: operandos siono; resultado siono.<br><b>&lt;&gt;</b>: operandos cuento, numerito o quebradito; resultado cuento (Paisascript convierte a texto al generar Gleam).</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Comparar type_izq con type_der según la tabla anterior.<br>2. Si no son compatibles, reportar el operador, los dos tipos y la posición (fila, columna, lexema).<br>3. Sintetizar el tipo del resultado o <b>error</b>; el tipo error es compatible con todo para no generar errores en cascada.<br>4. Continuar con el resto de la expresión.</td></tr></table>
+    </td></tr></table>
+    
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sdt" bgcolor="#DCE9FB"
+          style="background-color:#DCE9FB;">
+      <p class="regtitulo">REGLA SDT-11 — Operadores: la elección depende del tipo</p>
+      <p class="regnodos">Nodos de la gramática: &lt;expr_aditiva&gt;, &lt;expr_multiplicativa&gt;, &lt;expr_potencia&gt;, &lt;expr_relacional&gt;, &lt;expr_igualdad&gt;, &lt;expr_concat&gt;, &lt;expr_y&gt;, &lt;expr_o&gt;, &lt;expr_unaria&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos</td><td><b>type_izq</b> y <b>type_der</b>: <i>sintetizados</i> por el análisis semántico y anotados en el árbol. <b>Son el atributo crítico de toda la fase SDT.</b><br><b>code_izq</b>, <b>code_der</b>: <i>sintetizados</i>.</td></tr><tr><td class="etq">Acción de traducción</td><td>En Gleam <tt>Int</tt> y <tt>Float</tt> son tipos disjuntos con operadores <b>distintos</b>, así que la acción consulta el tipo antes de emitir:<br><tt>SI type ∈ {quebradito} → + - * / &gt; &lt; &gt;= &lt;= se emiten como +. -. *. /. &gt;. &lt;. &gt;=. &lt;=.</tt><br><tt>igualito → ==</tt>, <tt>distinto → !=</tt>, <tt>y_tambien → &amp;&amp;</tt>, <tt>o_que → ||</tt>, <tt>nanai → !</tt><br><tt>**</tt> no es operador en Gleam: se emite <tt>int.power</tt> / <tt>float.power</tt>, que devuelven <tt>Result</tt>, envueltos en <tt>result.unwrap</tt>.<br><tt>&lt;&gt;</tt> exige String en ambos lados: la acción inserta <tt>int.to_string</tt> / <tt>float.to_string</tt> donde haga falta.</td></tr><tr><td class="etq">Salida en Gleam</td><td><tt>a + b</tt> con quebradito &nbsp;→&nbsp; <tt>a +. b</tt><br><tt>x + y</tt> con numerito &nbsp;→&nbsp; <tt>x + y</tt><br><tt>"n = " &lt;&gt; x</tt> &nbsp;→&nbsp; <tt>"n = " &lt;&gt; int.to_string(x)</tt></td></tr></table>
+    </td></tr></table>
+    
+<div class="gram">/* La potencia asocia a la DERECHA: 2 ** 3 ** 2  =  2 ** (3 ** 2)   */<br>&lt;expr_potencia&gt;         ::= &lt;expr_unaria&gt; &lt;expr_potencia_p&gt;<br>&lt;expr_potencia_p&gt;       ::= &quot;**&quot; &lt;expr_potencia&gt;<br>                          | e</div>
+<div class="gram">&lt;expr_unaria&gt;           ::= nanai &lt;expr_unaria&gt;<br>                          | &quot;-&quot; &lt;expr_unaria&gt;<br>                          | &lt;expr_primaria&gt;</div>
+<div class="gram">&lt;expr_primaria&gt;         ::= NUM_ENTERO<br>                          | NUM_REAL<br>                          | CADENA_LITERAL<br>                          | sizas<br>                          | naranjas<br>                          | IDENTIFICADOR &lt;sufijo_id&gt;<br>                          | &quot;(&quot; &lt;expresion&gt; &quot;)&quot;</div>
+<div class="gram">/* Factorizacion por la izquierda: variable y llamada comparten el   */<br>/* prefijo IDENTIFICADOR, por eso se separa el sufijo.               */<br>&lt;sufijo_id&gt;             ::= &quot;(&quot; &lt;argumentos&gt; &quot;)&quot;<br>                          | e</div>
+<div class="gram">&lt;argumentos&gt;            ::= &lt;arg_lista&gt;<br>                          | e</div>
+<div class="gram">&lt;arg_lista&gt;             ::= &lt;expresion&gt; &lt;arg_resto&gt;</div>
+<div class="gram">&lt;arg_resto&gt;             ::= &quot;,&quot; &lt;expresion&gt; &lt;arg_resto&gt;<br>                          | e</div>
+
+    <table class="regla"><tr>
+      <td class="cuerpo_sem" bgcolor="#FFBF00"
+          style="background-color:#FFBF00;">
+      <p class="regtitulo">REGLA SEM-5 — Llamada a función: existencia, aridad y tipos</p>
+      <p class="regnodos">Nodos de la gramática: &lt;sent_llamada&gt;, &lt;sufijo_id&gt; dentro de &lt;expr_primaria&gt;, &lt;argumentos&gt;</p>
+      <table class="regtabla"><tr><td class="etq">Atributos involucrados</td><td><b>arity</b>: <i>sintetizado</i> (número de argumentos).<br><b>arg_type[1..n]</b>: <i>sintetizados</i> en cada &lt;expresion&gt;.<br><b>param_type[1..n]</b> y <b>return_type</b>: consultados en la firma de la tabla de símbolos.<br><b>type</b>: <i>sintetizado</i> en la llamada = return_type.</td></tr><tr><td class="etq">Restricción</td><td>La función debe estar declarada; <b>arity = |params|</b>; <b>arg_type[i] = param_type[i]</b> para todo i; el tipo del resultado es el tipo de retorno declarado o inferido.</td></tr><tr><td class="etq">Acciones del compilador</td><td>1. Buscar la firma de la función en el ámbito global.<br>2. Si no existe, reportar «función no declarada» con su posición.<br>3. Comparar la aridad y reportar el número esperado y el recibido.<br>4. Comparar cada argumento con su parámetro formal y reportar los desajustes de tipo.<br>5. Sintetizar return_type y continuar.</td></tr></table>
+    </td></tr></table>
+    
+<div class="comentario">================================================================================<br>  </div>
+
+<!-- ============================ PARTE 2 ============================ -->
+<h1 class="salto">3. El compilador: cuatro fases encadenadas</h1>
+
+<p>El compilador procesa la entrada en cuatro fases, cada una en su propio
+módulo, y cada una recibe exactamente lo que produjo la anterior.</p>
+
+<table class="resumen">
+  <tr><th width="6%">#</th><th width="20%">Fase</th><th width="26%">Módulo</th>
+      <th width="48%">Qué produce</th></tr>
+  <tr><td>1</td><td>Análisis léxico</td><td><tt>lexer.py</tt></td>
+      <td>Tokens con lexema, fila y columna. Reporta los no reconocidos.</td></tr>
+  <tr><td>2</td><td>Análisis sintáctico</td><td><tt>parser.py</tt></td>
+      <td>El CST según la gramática BNF. Recuperación de errores para seguir
+          analizando.</td></tr>
+  <tr><td>3</td><td>Análisis semántico</td><td><tt>analizador_semantico.py</tt></td>
+      <td>Tabla de símbolos y validación de las ocho reglas. Anota el tipo
+          sintetizado sobre cada nodo de expresión.</td></tr>
+  <tr><td>4</td><td>Traducción (SDT)</td><td><tt>traductor_sdt.py</tt></td>
+      <td>Recorre el CST aplicando las acciones SDT y emite el código Gleam.</td></tr>
+</table>
+
+<p>El encadenamiento lo gobierna <tt>compilador.py</tt>, que es el único punto
+donde se decide si hay salida:</p>
+
+<div class="codigo">from compilador import compilar
+
+resultado = compilar(codigo_fuente)
+if resultado.exitoso:
+    print(resultado.codigo_gleam)
+else:
+    print(resultado.reporte())      # errores de las tres fases, unificados</div>
+
+<h2>3.1 Si hay errores, no hay salida</h2>
+<p>Es una regla dura del enunciado y está implementada como tal: mientras
+exista un error léxico, sintáctico o semántico, la fase SDT <b>no se
+ejecuta</b> y el compilador se limita a reportar. Un error sintáctico además
+detiene el análisis semántico, porque un árbol roto solo produciría errores
+falsos.</p>
+
+<h2>3.2 Reporte de errores unificado</h2>
+<p>Las tres fases de análisis entregan sus errores al mismo objeto
+<tt>ErrorCompilacion</tt>, con <b>fase, fila, columna, lexema y mensaje
+descriptivo</b>. Cada fase aplica recuperación, de modo que una sola ejecución
+reporte el mayor número posible de problemas.</p>
+
+<div class="codigo">--- Fase SEMÁNTICA (8) ---
+  [SEMÁNTICA] Fila 13, Columna 21 sobre 'edad': [SEM-1] Se declara 'edad'
+  como numerito, pero la expresión es de tipo cuento
+  [SEMÁNTICA] Fila 33, Columna 1 sobre 'mientras_que': [SEM-6] El cuerpo de
+  'mientras_que' no redefine ninguna variable de la condición (tope): el
+  bucle nunca termina</div>
+
+<h2>3.3 La tabla de símbolos durante la fase SDT</h2>
+<p>El traductor recibe la tabla de símbolos ya construida y la consulta para
+los tipos de las variables y las firmas de las funciones. Es lo que le permite
+saber que <tt>escuche_pues(edad)</tt> necesita <tt>int.parse</tt> cuando
+<tt>edad</tt> es numerito, y que <tt>a + b</tt> debe emitirse como
+<tt>a +. b</tt> cuando los operandos son quebradito.</p>
+
+<h2>3.4 Un ejemplo completo</h2>
+<p><b>Entrada en Paisascript:</b></p>
+<div class="codigo">hagale_pues sumatoria(numerito n) pa_que_lleve numerito dele_pues
+    pille_pues numerito acumulado = 0
+    pille_pues numerito i = 1
+    mientras_que i &lt;= n dele_pues
+        pille_pues acumulado = acumulado + i
+        pille_pues i = i + 1
+    hasta_ahi
+    entregue_pues acumulado
+ya_quedo
+
+pille_pues numerito total = sumatoria(10)
+hable_pues("La sumatoria de 1 a 10 es: " &lt;&gt; total)</div>
+
+<p><b>Salida que produce la fase SDT:</b></p>
+<div class="gleam">import gleam/int
+import gleam/io
+
+pub fn main() {
+  let total = sumatoria(10)
+  io.println("La sumatoria de 1 a 10 es: " &lt;&gt; int.to_string(total))
+}
+
+pub fn sumatoria(n: Int) -&gt; Int {
+  let acumulado = 0
+  let i = 1
+  let #(acumulado, i) = bucle_1(n, acumulado, i)
+  acumulado
+}
+
+fn bucle_1(n: Int, acumulado: Int, i: Int) -&gt; #(Int, Int) {
+  case i &lt;= n {
+    True -&gt; {
+      let acumulado = acumulado + i
+      let i = i + 1
+      bucle_1(n, acumulado, i)
+    }
+    False -&gt; #(acumulado, i)
+  }
+}</div>
+
+<p>Obsérvense tres decisiones de la fase SDT en este fragmento: el
+<tt>int.to_string</tt> que exige la concatenación (SDT-11), el parámetro
+<tt>n</tt> que viaja a la función auxiliar porque el bucle lo lee aunque no lo
+modifique (SDT-7), y la tupla <tt>#(acumulado, i)</tt> con el estado del
+bucle, que es lo que reemplaza a la mutación que Gleam no tiene.</p>
+
+<h2>3.5 Archivos de prueba</h2>
+<table class="resumen">
+  <tr><th width="34%">Archivo</th><th width="20%">Qué contiene</th>
+      <th width="46%">Resultado esperado</th></tr>
+  <tr><td><tt>1_sin_errores.paisa</tt></td><td>Programa válido</td>
+      <td>Las cuatro fases corren y se produce la salida completa en Gleam.</td></tr>
+  <tr><td><tt>2_errores_semanticos.paisa</tt></td><td>8 errores semánticos</td>
+      <td>Se reportan los ocho con fila, columna y lexema. <b>No se genera
+          salida.</b></td></tr>
+  <tr><td><tt>3_errores_sintacticos.paisa</tt></td><td>5 errores sintácticos</td>
+      <td>Se reportan con recuperación. No se llega al análisis semántico ni
+          se genera salida.</td></tr>
+</table>
+
+<!-- ============================ BONUS ============================ -->
+<h1 class="salto">4. Bonus — Validación del código generado con IA</h1>
+
+<p><b>Modalidad C: combinación de validación y sugerencias.</b> Una vez que la
+fase SDT produce el código Gleam, ese texto se envía a un modelo de lenguaje
+que primero comprueba si es sintáctica y semánticamente correcto para Gleam y,
+si lo es, propone mejoras concretas.</p>
+
+<p>Es una capa <b>adicional</b>: el compilador funciona completo sin ella, y si
+no hay clave de API o no hay red, la interfaz lo indica y el resto sigue
+funcionando igual.</p>
+
+<h2>4.1 El prompt</h2>
+<div class="codigo">Eres un revisor experto del lenguaje Gleam.
+
+Este codigo fue GENERADO automaticamente por un compilador que traduce
+desde Paisascript. Revisa dos cosas y responde en espanol:
+
+1. VALIDEZ: ¿es sintactica y semanticamente correcto en Gleam? Revisa en
+   particular: que los tipos Int y Float no se mezclen (Gleam usa + y +.
+   como operadores distintos), que todo bloque termine en una expresion y
+   no en un 'let', que los modulos usados esten importados, y que las
+   ramas de cada 'case' devuelvan el mismo tipo.
+2. OPTIMIZACION: propon mejoras concretas e idiomaticas.
+
+Codigo generado:
+{codigo_gleam}</div>
+
+<h2>4.2 Flujo de integración</h2>
+<ol>
+  <li>El compilador ejecuta las cuatro fases y produce el código Gleam.</li>
+  <li>La interfaz ofrece el botón «Validar y optimizar con IA».</li>
+  <li><tt>ai_assistant.validar_codigo_generado(codigo_gleam)</tt> construye el
+      prompt y llama a la API.</li>
+  <li>La respuesta se muestra junto al código, separada de él y claramente
+      etiquetada como sugerencia.</li>
+</ol>
+
+</body>
+</html>
